@@ -9,13 +9,15 @@ consistências do cadastro e pontos de entrada.
 
 - Protheus **12.1.2410**
 - Compatível com **SmartClient HTML (navegador)** — a tela usa apenas componentes
-  suportados no browser e a leitura do arquivo ocorre sempre no lado servidor.
+  suportados no browser. O arquivo é sempre selecionado na **máquina local** de
+  quem está usando o sistema; o próprio `cGetFile()` faz o upload para o servidor,
+  onde ocorre toda a leitura e o processamento.
 
 ## Conteúdo
 
 | Arquivo | Descrição |
 |---|---|
-| `src/IMPPRD01.prw` | Fonte completo da rotina (tela + processamento + job) |
+| `src/IMPPRD01.prw` | Fonte completo da rotina (tela + processamento) |
 | `docs/MANUAL.md` | Manual de instalação, uso, layout e consultas SQL de apoio |
 | `exemplos/PRODUTOS_MODELO.csv` | Exemplo com cabeçalho (modo recomendado) |
 | `exemplos/PRODUTOS_LAYOUT_FIXO.txt` | Exemplo sem cabeçalho, separado por pipe |

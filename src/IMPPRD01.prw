@@ -24,15 +24,14 @@
    =========================================================================== */
 
 // --- Posicoes do array de configuracao (aCfg) -------------------------------
-#DEFINE CFG_ARQUIVO   1    // Caminho completo do arquivo a importar
-#DEFINE CFG_ORIGEM    2    // 1 = Servidor  2 = Estacao de trabalho
-#DEFINE CFG_SEPAR     3    // Separador escolhido (0 = detectar automatico)
-#DEFINE CFG_CODIF     4    // 1 = UTF-8 p/ ANSI  2 = nao converte  3 = ANSI p/ UTF-8
-#DEFINE CFG_HEADER    5    // .T. = 1a linha traz os nomes dos campos
-#DEFINE CFG_ATUALIZ   6    // .T. = altera produto ja cadastrado
-#DEFINE CFG_SIMULA    7    // .T. = apenas valida, nao grava
-#DEFINE CFG_DIRLOG    8    // Diretorio de log no servidor
-#DEFINE CFG_SIZE      8
+#DEFINE CFG_ARQUIVO   1    // Caminho completo do arquivo a importar (ja no servidor)
+#DEFINE CFG_SEPAR     2    // Separador escolhido (0 = detectar automatico)
+#DEFINE CFG_CODIF     3    // 1 = UTF-8 p/ ANSI  2 = nao converte  3 = ANSI p/ UTF-8
+#DEFINE CFG_HEADER    4    // .T. = 1a linha traz os nomes dos campos
+#DEFINE CFG_ATUALIZ   5    // .T. = altera produto ja cadastrado
+#DEFINE CFG_SIMULA    6    // .T. = apenas valida, nao grava
+#DEFINE CFG_DIRLOG    7    // Diretorio de log no servidor
+#DEFINE CFG_SIZE      7
 
 // --- Posicoes do array de resultado (aRes) ----------------------------------
 #DEFINE RES_LIDAS     1    // Linhas de dados lidas
@@ -178,7 +177,6 @@ Static Function IP01Tela()
     Local oFont
     Local oGetArq
     Local oGetLog
-    Local oCboOri
     Local oCboSep
     Local oCboCod
     Local oChkHea
@@ -187,10 +185,9 @@ Static Function IP01Tela()
 
     Local nLin      := 0
 
-    Local cArquivo  := PadR(IMP_DIRPAD, 250)
+    Local cArquivo  := Space(250)
     Local cDirLog   := PadR(IMP_DIRLOG, 250)
 
-    Local nOrigem   := 1
     Local nSepar    := 1
     Local nCodif    := 1
 
@@ -198,8 +195,6 @@ Static Function IP01Tela()
     Local lAtualiz  := .F.
     Local lSimula   := .F.
 
-    Local aOrigem   := {"1=Arquivo no servidor (recomendado)", ;
-                        "2=Arquivo na estacao de trabalho"}
     Local aSepar    := {"1=Ponto-e-virgula  ( ; )", ;
                         "2=Pipe  ( | )", ;
                         "3=Tabulacao  (TAB)", ;
@@ -212,7 +207,7 @@ Static Function IP01Tela()
     oFont := TFont():New("Arial", , -12, .T., .T.)
 
     DEFINE MSDIALOG oDlg TITLE "Importacao de Produtos via ExecAuto - versao " + IMP_VERSAO ;
-           FROM 0, 0 TO 340, 700 PIXEL
+           FROM 0, 0 TO 200, 700 PIXEL
 
     nLin := 8
     @ nLin, 010 SAY "Importacao de produtos (SB1/SB5) com as validacoes nativas do Protheus" ;
@@ -222,12 +217,8 @@ Static Function IP01Tela()
     @ nLin, 010 SAY "Arquivo:" SIZE 042, 08 PIXEL OF oDlg
     @ nLin - 1, 055 MSGET oGetArq VAR cArquivo SIZE 240, 10 PIXEL OF oDlg
     TButton():New(nLin - 1, 299, "...", oDlg, ;
-                  {|| cArquivo := IP01Busca(nOrigem, cArquivo), oGetArq:Refresh() }, ;
+                  {|| cArquivo := IP01Busca(cArquivo), oGetArq:Refresh() }, ;
                   018, 011, , , .F., .T., .F., , .F., , , .F.)
-
-    nLin += 17
-    @ nLin, 010 SAY "Origem:" SIZE 042, 08 PIXEL OF oDlg
-    @ nLin - 1, 055 COMBOBOX oCboOri VAR nOrigem ITEMS aOrigem SIZE 150, 10 PIXEL OF oDlg
 
     nLin += 17
     @ nLin, 010 SAY "Separador:" SIZE 042, 08 PIXEL OF oDlg
@@ -260,7 +251,7 @@ Static Function IP01Tela()
                   078, 013, , , .F., .T., .F., , .F., , , .F.)
 
     TButton():New(nLin, 195, "Importar", oDlg, ;
-                  {|| IP01Inicia(cArquivo, nOrigem, nSepar, nCodif, ;
+                  {|| IP01Inicia(cArquivo, nSepar, nCodif, ;
                                  lHeader, lAtualiz, lSimula, cDirLog) }, ;
                   058, 013, , , .F., .T., .F., , .F., , , .F.)
 
@@ -273,43 +264,36 @@ Return Nil
 
 
 /*/{Protheus.doc} IP01Busca
-Abre a selecao de arquivo conforme a origem escolhida.
-Quando a origem e a estacao de trabalho, o arquivo e copiado para o servidor,
-pois a leitura sempre ocorre no lado servidor.
+Abre a selecao de arquivo na maquina do usuario (estacao/navegador).
 
-@param nOrigem 1=Servidor  2=Estacao
-@param cAtual  Caminho atualmente informado
-@return cRet   Caminho do arquivo, ja valido no servidor
+No SmartClient HTML, cGetFile() com GETF_LOCALHARD abre o dialogo nativo
+do navegador na maquina LOCAL de quem esta usando o sistema; o arquivo
+escolhido e transferido automaticamente para uma area temporaria no
+servidor, e o caminho retornado ja e valido para leitura no AppServer.
+
+Para manter o arquivo organizado junto dos logs (e disponivel apos a
+limpeza da area temporaria), ele e copiado para \imp_produtos\.
+
+@param cAtual Caminho atualmente informado
+@return cRet  Caminho do arquivo, ja no servidor
 /*/
-Static Function IP01Busca(nOrigem, cAtual)
+Static Function IP01Busca(cAtual)
 
     Local cRet  := AllTrim(cAtual)
     Local cArq  := ""
     Local cDest := ""
     Local cMasc := "Arquivos CSV|*.csv|Arquivos TXT|*.txt|Todos|*.*"
 
-    If nOrigem == 1
-        // Navega no disco do SERVIDOR - funciona em qualquer SmartClient
-        cArq := cGetFile(cMasc, "Selecione o arquivo no servidor", 0, ;
-                         IMP_DIRPAD, .F., GETF_NETWORKDRIVE, .F., .T.)
-        If !Empty(cArq)
-            cRet := cArq
-        EndIf
-    Else
-        // Disco da ESTACAO - o arquivo e enviado ao servidor antes da leitura
-        cArq := cGetFile(cMasc, "Selecione o arquivo na estacao", 0, ;
-                         "C:\", .F., GETF_LOCALHARD, .F., .F.)
-        If !Empty(cArq)
-            cDest := IMP_DIRPAD + "up_" + DToS(dDataBase) + "_" + ;
-                     StrTran(Time(), ":", "") + "_" + IP01NmArq(cArq)
-            If __CopyFile(cArq, cDest)
-                cRet := cDest
-                MsgInfo("Arquivo enviado para o servidor em:" + CRLF + cDest, "Upload")
-            Else
-                MsgStop("Nao foi possivel enviar o arquivo para o servidor." + CRLF + CRLF + ;
-                        "Copie o arquivo manualmente para " + IMP_DIRPAD + ;
-                        " e utilize a origem 'Arquivo no servidor'.", "Upload")
-            EndIf
+    cArq := cGetFile(cMasc, "Selecione o arquivo de produtos", 0, ;
+                     "", .F., GETF_LOCALHARD, .F., .F.)
+
+    If !Empty(cArq)
+        cDest := IMP_DIRPAD + "up_" + DToS(dDataBase) + "_" + ;
+                 StrTran(Time(), ":", "") + "_" + IP01NmArq(cArq)
+        If __CopyFile(cArq, cDest)
+            cRet := cDest
+        Else
+            cRet := cArq    // usa a copia temporaria feita pelo proprio cGetFile
         EndIf
     EndIf
 
@@ -319,7 +303,7 @@ Return PadR(cRet, 250)
 /*/{Protheus.doc} IP01Inicia
 Valida os parametros da tela, dispara o processamento com regua e exibe o log.
 /*/
-Static Function IP01Inicia(cArquivo, nOrigem, nSepar, nCodif, lHeader, lAtualiz, lSimula, cDirLog)
+Static Function IP01Inicia(cArquivo, nSepar, nCodif, lHeader, lAtualiz, lSimula, cDirLog)
 
     Local aCfg    := Array(CFG_SIZE)
     Local aRes    := {}
@@ -339,9 +323,8 @@ Static Function IP01Inicia(cArquivo, nOrigem, nSepar, nCodif, lHeader, lAtualiz,
     IP01MkDir(cDirLog)
 
     If !File(AllTrim(cArquivo))
-        MsgStop("Arquivo nao localizado no servidor:" + CRLF + AllTrim(cArquivo) + CRLF + CRLF + ;
-                "Verifique o caminho informado ou utilize a origem " + ;
-                "'Arquivo na estacao de trabalho' para envia-lo.", "Atencao")
+        MsgStop("Arquivo nao localizado:" + CRLF + AllTrim(cArquivo) + CRLF + CRLF + ;
+                "Selecione novamente o arquivo pelo botao '...'.", "Atencao")
         Return Nil
     EndIf
 
@@ -353,7 +336,6 @@ Static Function IP01Inicia(cArquivo, nOrigem, nSepar, nCodif, lHeader, lAtualiz,
     EndIf
 
     aCfg[CFG_ARQUIVO] := AllTrim(cArquivo)
-    aCfg[CFG_ORIGEM]  := nOrigem
     aCfg[CFG_SEPAR]   := IIf(nSepar == 5, 0, nSepar)
     aCfg[CFG_CODIF]   := nCodif
     aCfg[CFG_HEADER]  := lHeader

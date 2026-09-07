@@ -41,8 +41,7 @@ que a importação em lote fique travada esperando alguém clicar em "OK".
 
 | Campo | Descrição |
 |---|---|
-| **Arquivo** | Caminho do arquivo. O botão `...` abre a seleção. |
-| **Origem** | `1` Servidor (recomendado) · `2` Estação de trabalho |
+| **Arquivo** | Caminho do arquivo. O botão `...` abre o seletor da máquina local. |
 | **Separador** | `;` · `\|` · TAB · `,` · Detectar automaticamente |
 | **Codificação** | `1` Arquivo UTF-8 (converte) · `2` ANSI/Excel (não converte) · `3` Ambiente UTF-8 |
 | **Primeira linha contém os nomes dos campos** | Marcado = mapeamento dinâmico pelo cabeçalho (padrão) |
@@ -53,13 +52,18 @@ que a importação em lote fique travada esperando alguém clicar em "OK".
 Botões: **Gerar arquivo modelo** (cria `\imp_produtos\MODELO_PRODUTOS.csv` a partir
 do layout do fonte), **Importar** e **Sair**.
 
-### Sobre a origem do arquivo no navegador
+### Como o arquivo chega ao servidor
 
-A leitura é sempre feita **pelo servidor**. Quando a origem é "Estação de
-trabalho", o arquivo é copiado para `\imp_produtos\` via `__CopyFile()` antes da
-leitura. No SmartClient HTML o acesso ao disco local é limitado, então **a opção
-"Arquivo no servidor" é a única garantida em qualquer cenário** — se o upload
-falhar, a rotina orienta a copiar o arquivo manualmente para `\imp_produtos\`.
+O botão `...` abre `cGetFile()` com `GETF_LOCALHARD`, que no SmartClient HTML
+sempre abre o seletor nativo do **navegador na máquina de quem está usando o
+sistema** — nunca o disco do servidor. Ao escolher o arquivo, o próprio
+framework transfere o conteúdo para uma área temporária do AppServer e devolve
+um caminho já válido para leitura no servidor.
+
+Para manter o arquivo junto dos logs da importação (e disponível mesmo depois
+que a área temporária for limpa), a rotina copia esse arquivo para
+`\imp_produtos\`, com o nome prefixado por `up_AAAAMMDD_HHMMSS_`. Toda a
+leitura e o processamento em `IP01Proc()` ocorrem exclusivamente no servidor.
 
 ---
 
