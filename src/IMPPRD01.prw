@@ -32,8 +32,7 @@
 #DEFINE CFG_ATUALIZ   6    // .T. = altera produto ja cadastrado
 #DEFINE CFG_SIMULA    7    // .T. = apenas valida, nao grava
 #DEFINE CFG_DIRLOG    8    // Diretorio de log no servidor
-#DEFINE CFG_JOB       9    // .T. = execucao sem interface (job/schedule)
-#DEFINE CFG_SIZE      9
+#DEFINE CFG_SIZE      8
 
 // --- Posicoes do array de resultado (aRes) ----------------------------------
 #DEFINE RES_LIDAS     1    // Linhas de dados lidas
@@ -92,67 +91,6 @@ User Function IMPPRD01()
     FWRestArea(aArea)
 
 Return Nil
-
-
-/*/{Protheus.doc} IMPPRDJB
-Execucao sem interface, para uso em Job / Schedule do Protheus.
-
-Chamada minima no Schedule:
-   U_IMPPRDJB("01","01","\imp_produtos\produtos.csv")
-
-@param cEmp     Codigo da empresa
-@param cFil     Codigo da filial
-@param cArquivo Caminho completo do arquivo no servidor
-@param lAtualiz .T. atualiza produtos existentes (default .F.)
-@param nCodif   1=UTF-8 p/ ANSI  2=nao converte  3=ANSI p/ UTF-8 (default 1)
-
-@return lOk .T. quando nao houve nenhuma rejeicao
-/*/
-User Function IMPPRDJB(cEmp, cFil, cArquivo, lAtualiz, nCodif)
-
-    Local aCfg    := Array(CFG_SIZE)
-    Local aRes    := {}
-    Local lOk     := .F.
-    Local cArqLog := ""
-
-    Default cEmp     := "01"
-    Default cFil     := "01"
-    Default cArquivo := IMP_DIRPAD + "produtos.csv"
-    Default lAtualiz := .F.
-    Default nCodif   := 1
-
-    RpcSetType(3)
-    RpcSetEnv(cEmp, cFil)
-
-    IP01MkDir(IMP_DIRPAD)
-    IP01MkDir(IMP_DIRLOG)
-
-    aCfg[CFG_ARQUIVO] := cArquivo
-    aCfg[CFG_ORIGEM]  := 1
-    aCfg[CFG_SEPAR]   := 0                  // detecta automaticamente
-    aCfg[CFG_CODIF]   := nCodif
-    aCfg[CFG_HEADER]  := .T.
-    aCfg[CFG_ATUALIZ] := lAtualiz
-    aCfg[CFG_SIMULA]  := .F.
-    aCfg[CFG_DIRLOG]  := IMP_DIRLOG
-    aCfg[CFG_JOB]     := .T.
-
-    aRes    := IP01Proc(aCfg)
-    cArqLog := IP01GrvLog(aCfg, aRes)
-    IP01GrvRej(aCfg, aRes)
-
-    lOk := (aRes[RES_ERRO] == 0)
-
-    ConOut("[IMPPRD01] Lidas: "  + cValToChar(aRes[RES_LIDAS])  + ;
-           " | Incluidos: "      + cValToChar(aRes[RES_INCLUI]) + ;
-           " | Alterados: "      + cValToChar(aRes[RES_ALTERA]) + ;
-           " | Ignorados: "      + cValToChar(aRes[RES_IGNORA]) + ;
-           " | Rejeitados: "     + cValToChar(aRes[RES_ERRO]))
-    ConOut("[IMPPRD01] Log: " + cArqLog)
-
-    RpcClearEnv()
-
-Return lOk
 
 
 // ===========================================================================
@@ -422,7 +360,6 @@ Static Function IP01Inicia(cArquivo, nOrigem, nSepar, nCodif, lHeader, lAtualiz,
     aCfg[CFG_ATUALIZ] := lAtualiz
     aCfg[CFG_SIMULA]  := lSimula
     aCfg[CFG_DIRLOG]  := AllTrim(cDirLog)
-    aCfg[CFG_JOB]     := .F.
 
     Processa({|| aRes := IP01Proc(aCfg) }, "Importacao de Produtos", "Aguarde...", .F.)
 
@@ -516,7 +453,6 @@ Static Function IP01Proc(aCfg)
     Local nTotal   := 0
 
     Local lExiste  := .F.
-    Local lJob     := aCfg[CFG_JOB]
 
     aRes[RES_LIDAS]  := 0
     aRes[RES_INCLUI] := 0
@@ -531,7 +467,7 @@ Static Function IP01Proc(aCfg)
     aAdd(aRes[RES_LOG], "Inicio ...: " + DToC(Date()) + " " + Time())
     aAdd(aRes[RES_LOG], "Arquivo ..: " + aCfg[CFG_ARQUIVO])
     aAdd(aRes[RES_LOG], "Empresa ..: " + FWCodEmp() + " / Filial: " + FWCodFil())
-    aAdd(aRes[RES_LOG], "Usuario ..: " + IIf(Type("cUserName") == "C", AllTrim(cUserName), "JOB"))
+    aAdd(aRes[RES_LOG], "Usuario ..: " + AllTrim(cUserName))
     aAdd(aRes[RES_LOG], "Modo .....: " + IIf(aCfg[CFG_SIMULA], "SIMULACAO (nao grava)", "GRAVACAO"))
     aAdd(aRes[RES_LOG], "Atualizar : " + IIf(aCfg[CFG_ATUALIZ], "SIM", "NAO"))
     aAdd(aRes[RES_LOG], Replicate("=", 100))
@@ -541,18 +477,14 @@ Static Function IP01Proc(aCfg)
 
     If !Empty(cErro)
         aAdd(aRes[RES_LOG], "ERRO FATAL: " + cErro)
-        If !lJob
-            MsgStop(cErro, "Erro na leitura do arquivo")
-        EndIf
+        MsgStop(cErro, "Erro na leitura do arquivo")
         FWRestArea(aArea)
         Return aRes
     EndIf
 
     If Len(aLinhas) == 0
         aAdd(aRes[RES_LOG], "ERRO FATAL: o arquivo esta vazio.")
-        If !lJob
-            MsgStop("O arquivo esta vazio.", "Atencao")
-        EndIf
+        MsgStop("O arquivo esta vazio.", "Atencao")
         FWRestArea(aArea)
         Return aRes
     EndIf
@@ -574,9 +506,7 @@ Static Function IP01Proc(aCfg)
 
     If !Empty(cErro)
         aAdd(aRes[RES_LOG], "ERRO FATAL NO LAYOUT: " + cErro)
-        If !lJob
-            MsgStop(cErro, "Erro no layout do arquivo")
-        EndIf
+        MsgStop(cErro, "Erro no layout do arquivo")
         FWRestArea(aArea)
         Return aRes
     EndIf
@@ -591,9 +521,7 @@ Static Function IP01Proc(aCfg)
 
     nTotal := Len(aLinhas) - (nIniDado - 1)
 
-    If !lJob
-        ProcRegua(nTotal)
-    EndIf
+    ProcRegua(nTotal)
 
     DbSelectArea("SB1")
     SB1->(DbSetOrder(1))    // B1_FILIAL + B1_COD
@@ -603,9 +531,7 @@ Static Function IP01Proc(aCfg)
 
         cLinha := aLinhas[nI]
 
-        If !lJob
-            IncProc("Processando linha " + cValToChar(nI) + " de " + cValToChar(Len(aLinhas)) + "...")
-        EndIf
+        IncProc("Processando linha " + cValToChar(nI) + " de " + cValToChar(Len(aLinhas)) + "...")
 
         // Despreza linhas em branco ou compostas apenas por separadores
         If Empty(AllTrim(StrTran(cLinha, cSepar, "")))

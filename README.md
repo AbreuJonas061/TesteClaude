@@ -58,6 +58,5 @@ cabeçalho) configurado na função `IP01Layout()`.
 - Rejeição de códigos duplicados dentro do próprio arquivo.
 - **Modo simulação**: valida o arquivo inteiro sem gravar nada.
 - Log em arquivo + **CSV de rejeitados com o motivo**, pronto para corrigir e reimportar.
-- Execução via **Job/Schedule** com `U_IMPPRDJB()`.
 
 Detalhes completos em [`docs/MANUAL.md`](docs/MANUAL.md).

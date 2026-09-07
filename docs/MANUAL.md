@@ -156,32 +156,7 @@ layout, dicionário, tipos, tamanhos e duplicidades sem gravar nada.
 
 ---
 
-## 7. Execução por Job / Schedule
-
-```advpl
-U_IMPPRDJB( cEmp, cFil, cArquivo, lAtualiz, nCodif )
-```
-
-| Parâmetro | Default | Descrição |
-|---|---|---|
-| `cEmp` | `"01"` | Empresa |
-| `cFil` | `"01"` | Filial |
-| `cArquivo` | `"\imp_produtos\produtos.csv"` | Arquivo no servidor |
-| `lAtualiz` | `.F.` | Atualizar produtos existentes |
-| `nCodif` | `1` | `1` UTF-8 · `2` sem conversão · `3` ANSI→UTF-8 |
-
-Exemplo no Schedule:
-
-```
-U_IMPPRDJB("01","01","\imp_produtos\produtos.csv",.T.,1)
-```
-
-Retorna `.T.` quando não houve nenhuma rejeição. O resumo também vai para o
-`console.log` com o prefixo `[IMPPRD01]`.
-
----
-
-## 8. Personalização
+## 7. Personalização
 
 Três funções concentram a manutenção, todas no início do fonte:
 
@@ -205,7 +180,7 @@ Return aFix
 
 ---
 
-## 9. Consultas SQL de apoio (SQL Server)
+## 8. Consultas SQL de apoio (SQL Server)
 
 Substitua `XXX` pelo código da empresa das tabelas.
 
@@ -279,7 +254,7 @@ SELECT b.B1_COD, b.B1_DESC
 
 ---
 
-## 10. Rejeições mais comuns
+## 9. Rejeições mais comuns
 
 | Mensagem | Causa provável |
 |---|---|
@@ -295,11 +270,11 @@ Acentuação saindo errada no log é sintoma de codificação: alterne a opção
 
 ---
 
-## 11. Estrutura do fonte
+## 10. Estrutura do fonte
 
 | Bloco | Funções |
 |---|---|
-| Entrada | `U_IMPPRD01` (tela) · `U_IMPPRDJB` (job) |
+| Entrada | `U_IMPPRD01` (ponto de entrada do menu) |
 | Manutenção | `IP01Layout` · `IP01Fixos` · `IP01Ignora` |
 | Interface | `IP01Tela` · `IP01Busca` · `IP01Inicia` · `IP01VerLog` |
 | Processamento | `IP01Proc` · `IP01Exec` · `IP01GetErr` |
