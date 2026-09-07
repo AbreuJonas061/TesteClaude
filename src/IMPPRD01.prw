@@ -66,6 +66,7 @@
 #DEFINE IMP_TAB       Chr(9)
 #DEFINE IMP_ASPA      Chr(34)
 #DEFINE IMP_BOM       Chr(239) + Chr(187) + Chr(191)
+#DEFINE IMP_MAXLOG    500       // Linhas de log exibidas em tela (o arquivo traz tudo)
 
 
 /*/{Protheus.doc} IMPPRD01
@@ -323,8 +324,10 @@ Static Function IP01Inicia(cArquivo, nSepar, nCodif, lHeader, lAtualiz, lSimula,
     IP01MkDir(cDirLog)
 
     If !File(AllTrim(cArquivo))
-        MsgStop("Arquivo nao localizado:" + CRLF + AllTrim(cArquivo) + CRLF + CRLF + ;
-                "Selecione novamente o arquivo pelo botao '...'.", "Atencao")
+        MsgStop("Arquivo nao localizado no servidor:" + CRLF + AllTrim(cArquivo) + CRLF + CRLF + ;
+                "Selecione o arquivo novamente pelo botao '...'. Se o erro persistir, " + ;
+                "copie o arquivo para " + IMP_DIRPAD + " no servidor e informe " + ;
+                "esse caminho diretamente no campo.", "Atencao")
         Return Nil
     EndIf
 
@@ -378,9 +381,19 @@ Static Function IP01VerLog(cResumo, aLog)
     Local oMemLog
     Local cTexto := ""
     Local nI     := 0
+    Local nQtd   := 0
 
+    // Em cargas grandes o log tem uma linha por produto. Jogar tudo no memo
+    // trava a tela, entao a exibicao e limitada - o arquivo .log tem o total
     For nI := 1 To Len(aLog)
+        If nQtd >= IMP_MAXLOG
+            cTexto += CRLF + Replicate("-", 60) + CRLF + ;
+                      "... exibicao limitada a " + cValToChar(IMP_MAXLOG) + " linhas. " + ;
+                      "Consulte o arquivo de log para o detalhamento completo." + CRLF
+            Exit
+        EndIf
         cTexto += aLog[nI] + CRLF
+        nQtd++
     Next nI
 
     DEFINE MSDIALOG oDlg TITLE "Resultado da Importacao de Produtos" ;
@@ -420,7 +433,6 @@ Static Function IP01Proc(aCfg)
     Local aDicio   := {}
     Local aMapa    := {}
     Local aCampos  := {}
-    Local aCodArq  := {}
     Local aRetLin  := {}
 
     Local cLinha   := ""
@@ -428,11 +440,16 @@ Static Function IP01Proc(aCfg)
     Local cErro    := ""
     Local cCodProd := ""
 
+    // Codigos ja lidos, concatenados entre pipes. A busca com $ e nativa e
+    // evita o aScan com codeblock, que fica O(n2) em arquivos grandes
+    Local cCodArq  := "|"
+
     Local nI       := 0
     Local nPos     := 0
     Local nOpcAuto := 0
     Local nIniDado := 1
     Local nTotal   := 0
+    Local nTamCod  := TamSX3("B1_COD")[1]
 
     Local lExiste  := .F.
 
@@ -544,17 +561,17 @@ Static Function IP01Proc(aCfg)
             Loop
         EndIf
 
-        cCodProd := PadR(aCampos[nPos][2], TamSX3("B1_COD")[1])
+        cCodProd := PadR(aCampos[nPos][2], nTamCod)
 
         // Duplicidade dentro do proprio arquivo
-        If aScan(aCodArq, {|x| x == cCodProd}) > 0
+        If ("|" + AllTrim(cCodProd) + "|") $ cCodArq
             aRes[RES_ERRO]++
             cErro := "Codigo " + AllTrim(cCodProd) + " duplicado dentro do arquivo."
             aAdd(aRes[RES_LOG], "Linha " + StrZero(nI, 6) + " REJEITADA .......: " + cErro)
             aAdd(aRes[RES_REJEIT], {nI, cLinha, cErro})
             Loop
         EndIf
-        aAdd(aCodArq, cCodProd)
+        cCodArq += AllTrim(cCodProd) + "|"
 
         lExiste := SB1->(DbSeek(xFilial("SB1") + cCodProd))
 
@@ -682,6 +699,12 @@ Static Function IP01GetErr()
     Local nI    := 0
 
     aLog := GetAutoGRLog()
+
+    // Sem log disponivel o retorno pode nao ser array - nao deixa o
+    // tratamento de erro derrubar a importacao inteira
+    If ValType(aLog) != "A"
+        aLog := {}
+    EndIf
 
     For nI := 1 To Len(aLog)
         cAux := AllTrim(aLog[nI])
@@ -881,8 +904,15 @@ Static Function IP01Mapa(cHeader, cSepar, aDicio, cErro)
         EndIf
 
         If nPos == 0
-            cErro := "Coluna " + cValToChar(nI) + " (" + cCol + ") nao corresponde a nenhum " + ;
-                     "campo das tabelas SB1/SB5. Corrija o cabecalho do arquivo."
+            If IP01CpoBlq(cCol)
+                cErro := "Coluna " + cValToChar(nI) + " (" + cCol + "): campo de controle nao " + ;
+                         "pode ser importado. A filial e definida pelo ambiente. " + ;
+                         "Remova essa coluna do arquivo."
+            Else
+                cErro := "Coluna " + cValToChar(nI) + " (" + cCol + ") nao corresponde a nenhum " + ;
+                         "campo real das tabelas SB1/SB5 (campos virtuais nao sao aceitos). " + ;
+                         "Corrija o cabecalho do arquivo."
+            EndIf
             Return aMapa
         EndIf
 
@@ -1050,6 +1080,9 @@ Static Function IP01Conv(cValor, cTipo, nTam, nDec, cCampo, cErro)
             EndIf
             xRet := cAux
 
+        Case cTipo == "M"
+            xRet := cAux            // memo nao tem limite fixo de tamanho
+
         Case cTipo == "N"
             xRet := IP01Num(cAux, @cErro)
             If !Empty(cErro)
@@ -1207,27 +1240,25 @@ Static Function IP01Split(cTexto, cSepar)
 
         cChar := SubStr(cTexto, nI, 1)
 
-        Do Case
-            Case cChar == IMP_ASPA .And. lAspas .And. SubStr(cTexto, nI + 1, 1) == IMP_ASPA
-                // Aspas duplicadas dentro do campo representam uma aspa literal
-                cCampo += IMP_ASPA
-                nI += 2
-                Loop
+        If cChar == IMP_ASPA .And. lAspas .And. SubStr(cTexto, nI + 1, 1) == IMP_ASPA
+            // Aspas duplicadas dentro do campo representam uma aspa literal
+            cCampo += IMP_ASPA
+            nI += 2
 
-            Case cChar == IMP_ASPA
-                lAspas := !lAspas
-                nI++
-                Loop
+        ElseIf cChar == IMP_ASPA
+            lAspas := !lAspas
+            nI++
 
-            Case cChar == cSepar .And. !lAspas
-                aAdd(aRet, cCampo)
-                cCampo := ""
-                nI++
-                Loop
-        EndCase
+        ElseIf cChar == cSepar .And. !lAspas
+            aAdd(aRet, cCampo)
+            cCampo := ""
+            nI++
 
-        cCampo += cChar
-        nI++
+        Else
+            cCampo += cChar
+            nI++
+
+        EndIf
 
     EndDo
 
@@ -1247,6 +1278,10 @@ consultar o SX3 a cada linha do arquivo.
 O MATA010 grava o complemento do produto (SB5) a partir do mesmo array de
 campos, por isso as duas tabelas sao carregadas.
 
+Campos VIRTUAIS (X3_CONTEXT = "V") sao descartados: nao existem fisicamente
+na tabela, nao podem ser enviados ao ExecAuto e costumam repetir o titulo de
+um campo real, o que faria a busca por titulo casar com o campo errado.
+
 @return aDic Array de {cCampo, cTipo, nTam, nDec, cTitulo, cArquivo}
 /*/
 Static Function IP01Dicio()
@@ -1263,6 +1298,12 @@ Static Function IP01Dicio()
 
         If SX3->(DbSeek(aArqs[nI]))
             While !SX3->(Eof()) .And. AllTrim(SX3->X3_ARQUIVO) == aArqs[nI]
+
+                If AllTrim(SX3->X3_CONTEXT) == "V" .Or. IP01CpoBlq(AllTrim(SX3->X3_CAMPO))
+                    SX3->(DbSkip())
+                    Loop
+                EndIf
+
                 aAdd(aDic, {AllTrim(SX3->X3_CAMPO)  , ;
                             AllTrim(SX3->X3_TIPO)   , ;
                             SX3->X3_TAMANHO         , ;
@@ -1279,6 +1320,24 @@ Static Function IP01Dicio()
     SX3->(RestArea(aArea))
 
 Return aDic
+
+
+/*/{Protheus.doc} IP01CpoBlq
+Indica se o campo e de controle e nao pode ser alimentado pela importacao.
+
+A filial e definida pelo ambiente (xFilial) e os campos de controle sao
+gerenciados pelo banco - enviar qualquer um deles ao ExecAuto provoca
+comportamento imprevisivel na gravacao.
+
+@param cCampo Nome do campo
+@return lBlq  .T. quando o campo e bloqueado
+/*/
+Static Function IP01CpoBlq(cCampo)
+
+    Local cAux := AllTrim(Upper(cCampo))
+
+Return Right(cAux, 7) == "_FILIAL" .Or. ;
+       cAux $ "D_E_L_E_T_/R_E_C_N_O_/R_E_C_D_E_L_"
 
 
 /*/{Protheus.doc} IP01LstCpo

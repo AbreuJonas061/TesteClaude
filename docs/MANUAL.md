@@ -90,6 +90,10 @@ Regras:
 - Colunas listadas em `IP01Ignora()` são desprezadas (`OBS`, `IGNORAR`, `ERRO`, `MOTIVO`…).
 - Campo inexistente no SX3 aborta a importação com mensagem indicando a coluna.
 - Coluna repetida no cabeçalho é rejeitada.
+- **Campos virtuais** (`X3_CONTEXT = "V"`) não são aceitos: não existem fisicamente
+  na tabela e não podem ser gravados pelo ExecAuto.
+- **Campos de controle** (`B1_FILIAL`, `B5_FILIAL`, `D_E_L_E_T_`, `R_E_C_N_O_`) são
+  bloqueados — a filial é definida pelo ambiente (`xFilial`).
 
 ### 4.2 Modo layout fixo — sem cabeçalho
 
@@ -115,6 +119,7 @@ Return aLay
 | `N` Numérico | `1234.56`, `1.234,56`, `1234,56`; ignora `R$`, `%` e espaços; arredonda por `X3_DECIMAL` |
 | `D` Data | `DD/MM/AAAA`, `DD-MM-AAAA`, `AAAAMMDD`, `AAAA-MM-DD` |
 | `L` Lógico | `1`, `S`, `SIM`, `T`, `.T.`, `V`, `VERDADEIRO` = verdadeiro |
+| `M` Memo | Texto, sem validação de tamanho |
 
 **Coluna vazia é omitida do ExecAuto**, de propósito: na inclusão o MATA010 aplica
 o padrão do dicionário (`X3_RELACAO`) e na alteração o conteúdo atual é preservado.
@@ -235,13 +240,17 @@ SELECT NNR_CODIGO, NNR_DESCRI FROM NNRXXX
 **Campos disponíveis para montar o cabeçalho do arquivo:**
 
 ```sql
-SELECT X3_CAMPO, X3_TITULO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_OBRIGAT
+SELECT X3_ARQUIVO, X3_CAMPO, X3_TITULO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_OBRIGAT
   FROM SX3XXX
  WHERE X3_ARQUIVO IN ('SB1','SB5')
-   AND D_E_L_E_T_ = ''
-   AND X3_BROWSE  = 'S'
+   AND D_E_L_E_T_  = ''
+   AND X3_CONTEXT <> 'V'              -- exclui virtuais (nao aceitos na carga)
+   AND X3_CAMPO NOT LIKE '%[_]FILIAL' -- exclui campo de controle
  ORDER BY X3_ARQUIVO, X3_ORDEM;
 ```
+
+Os campos obrigatórios (`X3_OBRIGAT = 'S'`) precisam vir no arquivo ou ter valor
+padrão, senão o ExecAuto rejeita o registro.
 
 **Produtos sem complemento SB5** (conferência pós-carga):
 
@@ -262,7 +271,8 @@ SELECT b.B1_COD, b.B1_DESC
 
 | Mensagem | Causa provável |
 |---|---|
-| `Coluna N (XXX) nao corresponde a nenhum campo` | Nome errado no cabeçalho ou campo customizado ausente no SX3 |
+| `Coluna N (XXX) nao corresponde a nenhum campo real` | Nome errado no cabeçalho, campo customizado ausente no SX3, ou campo virtual |
+| `campo de controle nao pode ser importado` | Coluna de filial ou de controle no arquivo — remova-a |
 | `conteudo com N caracteres excede o tamanho do dicionario` | Texto maior que `X3_TAMANHO` — trate na origem |
 | `valor numerico invalido` | Caractere não numérico na coluna (verifique separador e aspas) |
 | `Campo B1_COD nao informado` | Coluna do código vazia na linha |
