@@ -67,6 +67,7 @@
 #DEFINE AUD_MAXPAI    6         // Codigos pai listados por erro no relatorio
 #DEFINE AUD_MAXARV    3000      // Linhas da arvore no anexo do HTML
 #DEFINE AUD_ASPA      Chr(34)
+#DEFINE AUD_SEMCAD    "(sem cadastro)"   // Pseudo-tipo do item ausente no SB1
 
 // --- Posicoes do array de configuracao (aCfg) -------------------------------
 #DEFINE CFG_PRODUTO   1    // Codigo do item principal
@@ -213,8 +214,8 @@ inteira de 3000x1200. Sao as regras 7 da especificacao:
 O teste e linha a linha - vale a quantidade daquela chapa naquele pai, e
 nao o acumulado da arvore.
 
-Para incluir uma chapa nova basta acrescentar uma linha aqui; a lista e
-usada tanto na classificacao quanto na montagem do SQL.
+Para incluir uma chapa nova basta acrescentar uma linha aqui - a lista e
+lida por AE01Class(), que e quem aplica as duas regras.
 
 Estrutura de cada elemento:
    [1] Codigo do produto (SB1)
@@ -297,9 +298,10 @@ Estrutura de cada elemento:
    [1] Rotulo em negrito
    [2] Texto da regra
 
-@return aCri Array com os criterios
+@param cFilial Filial auditada, para o texto da regra de roteiro
+@return aCri   Array com os criterios
 /*/
-Static Function AE01Criter()
+Static Function AE01Criter(cFilial)
 
     Local aCri := {}
 
@@ -314,8 +316,8 @@ Static Function AE01Criter()
     aAdd(aCri, {"MP e SV", ;
                 "n&atilde;o exigem roteiro."})
     aAdd(aCri, {"Roteiro", ;
-                "qualquer opera&ccedil;&atilde;o em SG2 na filial " + AUD_FILIAL + ", " + ;
-                "sem filtro de data."})
+                "qualquer opera&ccedil;&atilde;o em SG2 na filial " + ;
+                AllTrim(cFilial) + ", sem filtro de data."})
     aAdd(aCri, {"Estrutura vigente", ;
                 "o item desce at&eacute; uma folha v&aacute;lida na &aacute;rvore; " + ;
                 "PA/PI que n&atilde;o descem s&atilde;o marcados como ERRO."})
@@ -358,7 +360,7 @@ Static Function AE01Tela()
 
     Local cProduto := Space(TamSX3("B1_COD")[1])
     Local cRevisao := PadR(AUD_REVPAD, 3)
-    Local cFilial  := PadR(AUD_FILIAL, 2)
+    Local cFilial  := PadR(AUD_FILIAL, TamSX3("B1_FILIAL")[1])
     Local cDirRel  := PadR(AUD_DIRREL, 250)
     Local cDirEst  := PadR(AUD_DIRESTA, 250)
 
@@ -393,7 +395,7 @@ Static Function AE01Tela()
     @ nLin - 1, 232 MSGET oGetRev VAR cRevisao PICTURE "@!" SIZE 030, 10 PIXEL OF oDlg
 
     @ nLin, 272 SAY "Filial:" SIZE 030, 08 PIXEL OF oDlg
-    @ nLin - 1, 297 MSGET oGetFil VAR cFilial PICTURE "@!" SIZE 020, 10 PIXEL OF oDlg
+    @ nLin - 1, 297 MSGET oGetFil VAR cFilial PICTURE "@!" SIZE 030, 10 PIXEL OF oDlg
 
     nLin += 17
     @ nLin, 010 SAY "Nivel maximo:" SIZE 050, 08 PIXEL OF oDlg
@@ -518,6 +520,7 @@ Static Function AE01Inicia(cProduto, cRevisao, cFilial, nNivel, ;
     Local cArqCsv := ""
     Local cAviso  := ""
     Local nSegIni := Seconds()
+    Local nSegFim := 0
 
     If Empty(AllTrim(cProduto))
         MsgStop("Informe o codigo do produto que sera auditado.", "Atencao")
@@ -526,6 +529,12 @@ Static Function AE01Inicia(cProduto, cRevisao, cFilial, nNivel, ;
 
     If Empty(AllTrim(cRevisao))
         MsgStop("Informe a revisao a ser consultada (ex.: " + AUD_REVPAD + ").", "Atencao")
+        Return Nil
+    EndIf
+
+    If Empty(AllTrim(cFilial))
+        MsgStop("Informe a filial usada nos filtros de SB1/SG1/SG2 " + ;
+                "(ex.: " + AUD_FILIAL + ").", "Atencao")
         Return Nil
     EndIf
 
@@ -586,7 +595,15 @@ Static Function AE01Inicia(cProduto, cRevisao, cFilial, nNivel, ;
         EndIf
     EndIf
 
-    AE01Ver(aCfg, aRes, cArqHtm, cArqCsv, cAviso, Seconds() - nSegIni)
+    nSegFim := Seconds()
+
+    // Seconds() conta a partir da meia-noite: se o processamento virou o dia,
+    // a diferenca sai negativa
+    If nSegFim < nSegIni
+        nSegFim += 86400
+    EndIf
+
+    AE01Ver(aCfg, aRes, cArqHtm, cArqCsv, cAviso, nSegFim - nSegIni)
 
 Return Nil
 
@@ -607,7 +624,7 @@ Static Function AE01Proc(aCfg)
     Local aArea    := FWGetArea()
     Local aRes     := Array(RES_SIZE)
     Local aLinhas  := {}
-    Local aPais    := {}
+    Local aPais    := {}    // Indice ordenado {codigo, 1} dos codigos que sao pai
     Local aChapas  := AE01Chapas()
     Local aRegras  := AE01Regras()
     Local aLin     := Nil
@@ -674,10 +691,11 @@ Static Function AE01Proc(aCfg)
         aAdd(aLinhas, aLin)
 
         // Lista dos codigos que aparecem como pai - e a informacao que no SQL
-        // original vinha do EXISTS contra a propria CTE (coluna TemFilho)
+        // original vinha do EXISTS contra a propria CTE (coluna TemFilho).
+        // Fica num indice ordenado: a busca e binaria, nao linha a linha
         cPai := aLin[LIN_CODPAI]
-        If !Empty(cPai) .And. aScan(aPais, {|x| x == cPai}) == 0
-            aAdd(aPais, cPai)
+        If !Empty(cPai) .And. AE01Acha(aPais, cPai) == 0
+            AE01Ins(aPais, cPai, 1)
         EndIf
 
         (cAlias)->(DbSkip())
@@ -696,7 +714,7 @@ Static Function AE01Proc(aCfg)
 
         aLin := aLinhas[nI]
 
-        aLin[LIN_TEMFILHO] := (aScan(aPais, {|x| x == aLin[LIN_CODIGO]}) > 0)
+        aLin[LIN_TEMFILHO] := (AE01Acha(aPais, aLin[LIN_CODIGO]) > 0)
 
         // As duas condicoes isoladas alimentam as colunas Estrutura e Roteiro
         // do relatorio; a Situacao da query mostra apenas a primeira delas
@@ -986,7 +1004,7 @@ Static Function AE01Class(aLin, aChapas, aRegras)
             lQtd := .T.
 
         // 2 - chapa precisa estar em KG
-        Case nPos > 0 .And. cUM != "KG"
+        Case nPos > 0 .And. !(cUM == "KG")
             cSit := "ERRO"
             cMot := "Chapa com unidade diferente de KG"
             lQtd := .T.
@@ -1025,7 +1043,7 @@ Static Function AE01Class(aLin, aChapas, aRegras)
             cMot := "Item bloqueado"
 
         // 10 - so o principal carrega a revisao informada pelo usuario
-        Case aLin[LIN_NIVEL] == 0 .And. aLin[LIN_REVATU] != aLin[LIN_REVCON]
+        Case aLin[LIN_NIVEL] == 0 .And. !(aLin[LIN_REVATU] == aLin[LIN_REVCON])
             cSit := "VERIFICAR"
             cMot := "Revisao consultada diferente da revisao atual (B1_REVATU " + ;
                     aLin[LIN_REVATU] + ")"
@@ -1055,6 +1073,8 @@ Return Nil
 #DEFINE UNI_SIT      10
 #DEFINE UNI_MOTIVOS  11    // Array de motivos distintos
 #DEFINE UNI_PAIS     12    // Array de {cPai, nNivel}
+#DEFINE UNI_FOLHA    13    // .T. = e folha valida (a regra de estrutura nao se aplica)
+#DEFINE UNI_NOSB1    14    // .T. = o codigo existe no SB1
 
 /*/{Protheus.doc} AE01Agrupa
 Monta, a partir das linhas ja classificadas, tudo o que o relatorio consome:
@@ -1076,6 +1096,7 @@ Static Function AE01Agrupa(aCfg, aRes, aRegras)
 
     Local aLinhas := aRes[RES_LINHAS]
     Local aUni    := {}
+    Local aOrd    := {}    // Indice ordenado {codigo, posicao em aUni}
     Local aErr    := Nil
     Local aLin    := Nil
 
@@ -1087,11 +1108,13 @@ Static Function AE01Agrupa(aCfg, aRes, aRegras)
     Local nPos    := 0
 
     // ---------------------------------------------------- codigos unicos
+    // O indice aOrd evita varrer aUni inteiro a cada linha: numa arvore de
+    // milhares de itens a busca linear aqui dominaria o tempo da rotina
     For nI := 1 To Len(aLinhas)
 
         aLin := aLinhas[nI]
         cCod := aLin[LIN_CODIGO]
-        nPos := aScan(aUni, {|x| x[UNI_CODIGO] == cCod})
+        nPos := AE01Acha(aOrd, cCod)
 
         If nPos == 0
             aAdd(aUni, {cCod                , ;
@@ -1105,8 +1128,12 @@ Static Function AE01Agrupa(aCfg, aRes, aRegras)
                         .F.                 , ;
                         "OK"                , ;
                         {}                  , ;
-                        {}                  })
+                        {}                  , ;
+                        AE01Folha(aLin[LIN_TIPO], aLin[LIN_TEMEST], aRegras), ;
+                        aLin[LIN_NOSB1]     })
+
             nPos := Len(aUni)
+            AE01Ins(aOrd, cCod, nPos)
         EndIf
 
         aUni[nPos][UNI_OCORR]++
@@ -1125,11 +1152,6 @@ Static Function AE01Agrupa(aCfg, aRes, aRegras)
         If !Empty(aLin[LIN_MOTIVO]) .And. ;
            aScan(aUni[nPos][UNI_MOTIVOS], {|x| x == aLin[LIN_MOTIVO]}) == 0
             aAdd(aUni[nPos][UNI_MOTIVOS], aLin[LIN_MOTIVO])
-        EndIf
-
-        If !Empty(aLin[LIN_CODPAI]) .And. ;
-           aScan(aUni[nPos][UNI_PAIS], {|x| x[1] == aLin[LIN_CODPAI]}) == 0
-            aAdd(aUni[nPos][UNI_PAIS], {aLin[LIN_CODPAI], aLin[LIN_NIVEL]})
         EndIf
 
     Next nI
@@ -1158,6 +1180,29 @@ Static Function AE01Agrupa(aCfg, aRes, aRegras)
 
     aRes[RES_CAB][CAB_REVISAO] := aCfg[CFG_REVISAO]
     aRes[RES_CAB][CAB_FILIAL]  := aCfg[CFG_FILIAL]
+
+    // ------------------------------------------------------ codigos pai
+    // Passada separada, e so para quem tem ocorrencia: um parafuso usado em
+    // 800 pais nao interessa ao relatorio e a deduplicacao dele custaria caro
+    For nI := 1 To Len(aLinhas)
+
+        aLin := aLinhas[nI]
+
+        If Empty(aLin[LIN_CODPAI])
+            Loop
+        EndIf
+
+        nPos := AE01Acha(aOrd, aLin[LIN_CODIGO])
+
+        If nPos == 0 .Or. aUni[nPos][UNI_SIT] == "OK"
+            Loop
+        EndIf
+
+        If aScan(aUni[nPos][UNI_PAIS], {|x| x[1] == aLin[LIN_CODPAI]}) == 0
+            aAdd(aUni[nPos][UNI_PAIS], {aLin[LIN_CODPAI], aLin[LIN_NIVEL]})
+        EndIf
+
+    Next nI
 
     // --------------------------------------- erros, alertas e contadores
     For nI := 1 To Len(aUni)
@@ -1191,11 +1236,18 @@ Static Function AE01Agrupa(aCfg, aRes, aRegras)
             aErr[ERR_MOTIVO] += IIf(nJ > 1, " | ", "") + aUni[nI][UNI_MOTIVOS][nJ]
         Next nJ
 
-        // "-" quando a regra nem se aplica ao tipo - o quadro fica honesto:
-        // MP sem roteiro nao e OK nem ERRO, e simplesmente nao avaliado
-        aErr[ERR_EST] := IIf(aUni[nI][UNI_ERREST], "ERRO", "OK")
-        aErr[ERR_ROT] := IIf(aUni[nI][UNI_EXIGROT], ;
-                             IIf(aUni[nI][UNI_ERRROT], "ERRO", "OK"), "-")
+        // "-" quando a regra nem se aplica: MP sem roteiro nao e OK nem ERRO,
+        // e simplesmente nao avaliado. Idem estrutura numa folha valida, ou
+        // qualquer das duas num componente que nem existe no SB1
+        If !aUni[nI][UNI_NOSB1]
+            aErr[ERR_EST] := "-"
+            aErr[ERR_ROT] := "-"
+        Else
+            aErr[ERR_EST] := IIf(aUni[nI][UNI_FOLHA], "-", ;
+                                 IIf(aUni[nI][UNI_ERREST], "ERRO", "OK"))
+            aErr[ERR_ROT] := IIf(aUni[nI][UNI_EXIGROT], ;
+                                 IIf(aUni[nI][UNI_ERRROT], "ERRO", "OK"), "-")
+        EndIf
 
         If aUni[nI][UNI_SIT] == "ERRO"
             aAdd(aRes[RES_ERROS], aErr)
@@ -1217,7 +1269,7 @@ Static Function AE01Agrupa(aCfg, aRes, aRegras)
         cTipo := aLinhas[nI][LIN_TIPO]
 
         If Empty(cTipo)
-            cTipo := "(sem cadastro)"
+            cTipo := AUD_SEMCAD
         EndIf
 
         nPos := aScan(aRes[RES_TOTEST], {|x| x[TOT_TIPO] == cTipo})
@@ -1249,13 +1301,16 @@ Static Function AE01Agrupa(aCfg, aRes, aRegras)
         cTipo := aUni[nI][UNI_TIPO]
 
         If Empty(cTipo)
-            cTipo := "(sem cadastro)"
+            cTipo := AUD_SEMCAD
         EndIf
 
         nPos := aScan(aRes[RES_TOTROT], {|x| x[ROT_TIPO] == cTipo})
 
         If nPos == 0
-            aAdd(aRes[RES_TOTROT], {cTipo, 0, 0, 0, 0, "Sim"})
+            // Tipo fora de AE01Regras() segue PA/PI e exige roteiro; o item
+            // que nem esta no SB1 nao chega a ser avaliado
+            aAdd(aRes[RES_TOTROT], {cTipo, 0, 0, 0, 0, ;
+                                    IIf(cTipo == AUD_SEMCAD, "&mdash;", "Sim")})
             nPos := Len(aRes[RES_TOTROT])
         EndIf
 
@@ -1287,6 +1342,78 @@ Static Function AE01Agrupa(aCfg, aRes, aRegras)
             aRes[RES_TOTROT] := aSize(aRes[RES_TOTROT], Len(aRes[RES_TOTROT]) - 1)
         EndIf
     Next nI
+
+Return Nil
+
+
+/*/{Protheus.doc} AE01Acha
+Busca binaria num indice ordenado de {chave, valor}.
+
+Existe para tirar a busca linear de dentro dos lacos que percorrem a arvore
+inteira - com alguns milhares de linhas, o aScan com bloco de codigo em cada
+uma delas passa a dominar o tempo da rotina.
+
+@param aOrd   Indice ordenado por [1], montado por AE01Ins()
+@param cChave Chave procurada
+@return nRet  Valor associado, ou 0 quando a chave nao esta no indice
+/*/
+Static Function AE01Acha(aOrd, cChave)
+
+    Local nIni := 1
+    Local nFim := Len(aOrd)
+    Local nMei := 0
+
+    Do While nIni <= nFim
+
+        nMei := Int((nIni + nFim) / 2)
+
+        If aOrd[nMei][1] == cChave
+            Return aOrd[nMei][2]
+        ElseIf aOrd[nMei][1] < cChave
+            nIni := nMei + 1
+        Else
+            nFim := nMei - 1
+        EndIf
+
+    EndDo
+
+Return 0
+
+
+/*/{Protheus.doc} AE01Ins
+Insere {chave, valor} no indice mantendo a ordem por chave.
+
+aIns abre espaco na posicao e descarta o ultimo elemento, entao o array
+precisa crescer antes - por isso o aAdd de um Nil.
+
+@param aOrd   Indice ordenado, alterado por referencia
+@param cChave Chave a inserir (nao pode ja existir)
+@param nValor Valor associado
+/*/
+Static Function AE01Ins(aOrd, cChave, nValor)
+
+    Local nIni := 1
+    Local nFim := Len(aOrd)
+    Local nMei := 0
+    Local nPos := Len(aOrd) + 1
+
+    Do While nIni <= nFim
+
+        nMei := Int((nIni + nFim) / 2)
+
+        If aOrd[nMei][1] < cChave
+            nIni := nMei + 1
+        Else
+            nPos := nMei
+            nFim := nMei - 1
+        EndIf
+
+    EndDo
+
+    aAdd(aOrd, Nil)
+    aIns(aOrd, nPos)
+
+    aOrd[nPos] := {cChave, nValor}
 
 Return Nil
 
@@ -1344,7 +1471,7 @@ Static Function AE01Rel(aCfg, aRes)
     AE01Analis(aHtm, aRes, nSec)
 
     nSec++
-    AE01Regr(aHtm, nSec)
+    AE01Regr(aHtm, nSec, aCfg[CFG_FILIAL])
 
     If aCfg[CFG_ARVORE]
         nSec++
@@ -1732,12 +1859,13 @@ Return Nil
 /*/{Protheus.doc} AE01Regr
 Secao CRITERIOS DE ANALISE, alimentada por AE01Criter().
 
-@param aHtm Array do HTML, alterado por referencia
-@param nSec Numero da secao
+@param aHtm    Array do HTML, alterado por referencia
+@param nSec    Numero da secao
+@param cFilial Filial auditada
 /*/
-Static Function AE01Regr(aHtm, nSec)
+Static Function AE01Regr(aHtm, nSec, cFilial)
 
-    Local aCri := AE01Criter()
+    Local aCri := AE01Criter(cFilial)
     Local nI   := 0
 
     AE01Sec(aHtm, nSec, "CRIT&Eacute;RIOS DE AN&Aacute;LISE")
@@ -2059,6 +2187,11 @@ Static Function AE01Csv(aCfg, aRes)
         ConOut("[zAudEst] Nao foi possivel criar o CSV: " + cArq + ;
                " (FError " + cValToChar(FError()) + ")")
         Return ""
+    EndIf
+
+    // Sem o BOM o Excel abre o CSV UTF-8 como ANSI e quebra a acentuacao
+    If aCfg[CFG_CODIF] == 2
+        FWrite(nHdl, Chr(239) + Chr(187) + Chr(191))
     EndIf
 
     FWrite(nHdl, "NIVEL;COD_PAI;CODIGO;DESCRICAO;TIPO;UM;QUANTIDADE;BLOQUEADO;" + ;

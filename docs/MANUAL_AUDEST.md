@@ -44,6 +44,14 @@ vigência da estrutura usa a data de hoje em `G1_INI` / `G1_FIM`.
 | `AUDEST_<produto>_<data>_<hora>.html` | Relatório no padrão da engenharia |
 | `AUDEST_<produto>_<data>_<hora>.csv` | Árvore completa com as colunas calculadas |
 
+Em UTF-8 o CSV sai com BOM — sem ele o Excel abre o arquivo como ANSI e quebra
+a acentuação.
+
+Nas colunas **Estrutura** e **Roteiro** da tabela de erros, `-` significa que a
+regra **não se aplica** àquele item — e não que ele passou. É o caso do roteiro
+num MP, da estrutura numa folha válida, e das duas num componente que sequer
+existe no SB1.
+
 O HTML abre no navegador, imprime em PDF (`Ctrl+P`) e também abre no Word,
 preservando cores e tabelas.
 
@@ -84,6 +92,7 @@ query original, cujos `CASE` de MP/SV e BN/EM não pegam tipo desconhecido.
 
 ### Pontos a verificar (não são erro)
 
+
 - Item bloqueado (`B1_MSBLQL = 1`).
 - Revisão consultada diferente de `B1_REVATU` — só no item principal.
 
@@ -99,8 +108,8 @@ AE01Regras()   // por tipo: quando exige roteiro e quando e folha valida
 AE01Criter()   // textos do quadro "CRITERIOS DE ANALISE"
 ```
 
-`AE01Chapas()` alimenta a classificação; `AE01Regras()` define também a **ordem
-das linhas** dos dois quadros do relatório. Os textos de `AE01Regras()` e
+`AE01Chapas()` alimenta a classificação (`AE01Class()`); `AE01Regras()` define
+também a **ordem das linhas** dos dois quadros do relatório. Os textos de `AE01Regras()` e
 `AE01Criter()` vão direto para o HTML, então acentos ali se escrevem como
 entidade (`&aacute;`, `&ccedil;`).
 
@@ -235,3 +244,12 @@ sustentam o `INNER JOIN` da recursão e o subselect de `B1_REVATU`.
 
 Reduzir o **nível máximo** também corta custo, mas muda o resultado: um ramo que
 não chega à folha dentro do limite passa a ser marcado como erro de estrutura.
+
+Do lado do ADVPL, as buscas por código (o `TemFilho` e o agrupamento por código
+único) usam um índice ordenado com busca binária — `AE01Acha()` e `AE01Ins()`.
+Com busca linear, uma árvore de 1.700 linhas e ~950 códigos únicos daria cerca
+de 3,3 milhões de comparações; pelo índice são ~35 mil.
+
+A lista de códigos pai é montada numa passada à parte, só para os códigos que
+têm ocorrência. Um parafuso usado em 800 pais não entra no relatório, e
+deduplicar os pais dele custaria caro à toa.
