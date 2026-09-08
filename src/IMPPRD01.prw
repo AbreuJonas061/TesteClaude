@@ -192,7 +192,7 @@ Return Nil
 /*/{Protheus.doc} IP01Proc
 Le o arquivo e grava os produtos pelo ExecAuto.
 
-@return aRes Hash com o resultado da importacao
+@return aRes Array com o resultado (defines RES_*)
 /*/
 Static Function IP01Proc(cArq, lSimula, lAtualiz)
 
@@ -416,11 +416,14 @@ ExecAuto costuma repetir a mesma varias vezes - aparecem uma unica vez.
 Static Function IP01Erro()
 
     Local aLog   := GetAutoGRLog()
+    Local aMsgs  := {}
     Local cTudo  := ""
     Local cErro  := ""
     Local cMsg   := ""
     Local cCampo := ""
+    Local cOrig  := ""
     Local nI     := 0
+    Local nPos   := 0
 
     If ValType(aLog) != "A"
         aLog := {}
@@ -433,21 +436,42 @@ Static Function IP01Erro()
     cTudo := StrTran(cTudo, Chr(13), " ")
     cTudo := StrTran(cTudo, Chr(10), " ")
 
-    // O log pode conter varios blocos de erro; percorre todos
+    // O ExecAuto repete a mesma mensagem em varios blocos, e nem todos trazem
+    // a origem. Por isso cada mensagem e guardada uma unica vez, ficando com o
+    // melhor prefixo encontrado em qualquer um dos blocos.
     While "Mensagem do erro:" $ cTudo
 
         cMsg   := IP01Tag(cTudo, "Mensagem do erro:")
         cCampo := IP01Tag(cTudo, "Id do campo de erro:")
 
-        If !Empty(cMsg) .And. !(cMsg $ cErro)
-            cErro += IIf(Empty(cErro), "", " | ")
-            cErro += IIf(Empty(cCampo), "", cCampo + ": ")
-            cErro += cMsg
+        // Sem campo identificado, o "Id do erro" e a unica pista da origem -
+        // e o caso das recusas vindas de integracao. Ids com digitos
+        // ("SFCC101") sao codigos internos e nao dizem nada ao usuario.
+        If Empty(cCampo)
+            cOrig := IP01Tag(cTudo, "Id do erro:")
+            If !IP01TemNum(cOrig)
+                cCampo := cOrig
+            EndIf
+        EndIf
+
+        If !Empty(cMsg)
+            nPos := aScan(aMsgs, {|x| x[1] == cMsg})
+            If nPos == 0
+                aAdd(aMsgs, {cMsg, cCampo})
+            ElseIf Empty(aMsgs[nPos][2]) .And. !Empty(cCampo)
+                aMsgs[nPos][2] := cCampo
+            EndIf
         EndIf
 
         cTudo := SubStr(cTudo, At("Mensagem do erro:", cTudo) + 17)
 
     EndDo
+
+    For nI := 1 To Len(aMsgs)
+        cErro += IIf(Empty(cErro), "", " | ")
+        cErro += IIf(Empty(aMsgs[nI][2]), "", aMsgs[nI][2] + ": ")
+        cErro += aMsgs[nI][1]
+    Next nI
 
     If Empty(cErro)
         // Formato inesperado: devolve o texto bruto, ainda melhor que nada
@@ -459,6 +483,22 @@ Static Function IP01Erro()
     EndIf
 
 Return cErro
+
+
+/*/{Protheus.doc} IP01TemNum
+Indica se o texto contem algum digito.
+/*/
+Static Function IP01TemNum(cTexto)
+
+    Local nI := 0
+
+    For nI := 1 To Len(cTexto)
+        If IsDigit(SubStr(cTexto, nI, 1))
+            Return .T.
+        EndIf
+    Next nI
+
+Return .F.
 
 
 /*/{Protheus.doc} IP01Tag
