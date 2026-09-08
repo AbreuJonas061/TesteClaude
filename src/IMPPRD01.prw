@@ -921,13 +921,10 @@ quanto a codificacao e BOM.
 /*/
 Static Function IP01LerArq(aCfg, cErro)
 
-    Local aLin   := {}
-    Local aBloco := {}
-    Local oFile
-    Local cBloco := ""
-    Local cArq   := aCfg[CFG_ARQUIVO]
-    Local lPrim  := .T.
-    Local nJ     := 0
+    Local aLin := {}
+    Local aAux := {}
+    Local cArq := aCfg[CFG_ARQUIVO]
+    Local nI   := 0
 
     cErro := ""
 
@@ -936,38 +933,32 @@ Static Function IP01LerArq(aCfg, cErro)
         Return aLin
     EndIf
 
-    oFile := FWFileReader():New(cArq)
+    // Leitura padrao, linha a linha
+    aLin := IP01LeRdr(cArq, @cErro)
 
-    If !oFile:Open()
-        cErro := "Nao foi possivel abrir o arquivo: " + cArq
-        Return aLin
+    If !Empty(cErro)
+        Return {}
     EndIf
 
-    While !oFile:EoF()
-
-        cBloco := oFile:GetLine()
-
-        // Remove o BOM da primeira linha, quando existir
-        If lPrim
-            If SubStr(cBloco, 1, 3) == IMP_BOM
-                cBloco := SubStr(cBloco, 4)
-            EndIf
-            lPrim := .F.
+    // Rede de seguranca: se o reader parou na primeira linha ou devolveu o
+    // arquivo inteiro em um bloco so, le o conteudo direto e quebra por CR/LF.
+    // Vale a tentativa porque o custo e baixo e o sintoma (uma unica linha) e
+    // indistinguivel de um arquivo que realmente so tem o cabecalho.
+    If Len(aLin) <= 1
+        aAux := IP01LeMemo(cArq)
+        If Len(aAux) > Len(aLin)
+            aLin := aAux
         EndIf
+    EndIf
 
-        // GetLine normalmente devolve uma linha, mas quando o terminador do
-        // arquivo nao e o esperado pelo reader vem mais de uma de uma vez.
-        // Por isso o conteudo e QUEBRADO por CR/LF: apenas remover os
-        // separadores grudaria o arquivo inteiro em uma unica linha.
-        aBloco := IP01Quebra(cBloco)
+    // O BOM sai antes da conversao de codificacao, senao vira lixo no texto
+    If Len(aLin) > 0 .And. SubStr(aLin[1], 1, 3) == IMP_BOM
+        aLin[1] := SubStr(aLin[1], 4)
+    EndIf
 
-        For nJ := 1 To Len(aBloco)
-            aAdd(aLin, IP01Codif(aBloco[nJ], aCfg[CFG_CODIF]))
-        Next nJ
-
-    EndDo
-
-    oFile:Close()
+    For nI := 1 To Len(aLin)
+        aLin[nI] := IP01Codif(aLin[nI], aCfg[CFG_CODIF])
+    Next nI
 
     // Elimina as linhas vazias do final do arquivo
     While Len(aLin) > 0 .And. Empty(AllTrim(aLin[Len(aLin)]))
@@ -975,6 +966,72 @@ Static Function IP01LerArq(aCfg, cErro)
     EndDo
 
 Return aLin
+
+
+/*/{Protheus.doc} IP01LeRdr
+Le o arquivo linha a linha com FWFileReader.
+
+A iteracao usa HasLine(), que e o metodo documentado para percorrer o
+arquivo. Cada bloco devolvido ainda passa por IP01Quebra porque, quando o
+terminador nao e o esperado pelo reader, GetLine pode trazer mais de uma
+linha de uma vez.
+
+@param cArq  Caminho do arquivo no servidor
+@param cErro Por referencia
+@return aLin Array de linhas (sem tratamento de codificacao)
+/*/
+Static Function IP01LeRdr(cArq, cErro)
+
+    Local aLin   := {}
+    Local aBloco := {}
+    Local oFile
+    Local cBloco := ""
+    Local nJ     := 0
+
+    cErro := ""
+
+    oFile := FWFileReader():New(cArq)
+
+    If !oFile:Open()
+        cErro := "Nao foi possivel abrir o arquivo: " + cArq
+        Return aLin
+    EndIf
+
+    While oFile:HasLine()
+
+        cBloco := oFile:GetLine()
+        aBloco := IP01Quebra(cBloco)
+
+        For nJ := 1 To Len(aBloco)
+            aAdd(aLin, aBloco[nJ])
+        Next nJ
+
+    EndDo
+
+    oFile:Close()
+
+Return aLin
+
+
+/*/{Protheus.doc} IP01LeMemo
+Le o arquivo inteiro de uma vez e quebra por CR/LF.
+
+Usada apenas como alternativa quando a leitura linha a linha nao devolve
+o conteudo esperado. Carrega tudo em memoria, o que e aceitavel para
+arquivos de carga de produtos.
+
+@param cArq  Caminho do arquivo no servidor
+@return aLin Array de linhas (sem tratamento de codificacao)
+/*/
+Static Function IP01LeMemo(cArq)
+
+    Local cTexto := MemoRead(cArq)
+
+    If Empty(cTexto)
+        Return {}
+    EndIf
+
+Return IP01Quebra(cTexto)
 
 
 /*/{Protheus.doc} IP01Quebra
