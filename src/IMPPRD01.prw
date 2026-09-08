@@ -40,8 +40,14 @@
 #DEFINE RES_IGNORA    4    // Produtos ignorados (ja existem e nao atualiza)
 #DEFINE RES_ERRO      5    // Linhas rejeitadas
 #DEFINE RES_LOG       6    // Array de strings com o log detalhado
-#DEFINE RES_REJEIT    7    // Array de {nLinha, cLinhaOriginal, cMotivo}
+#DEFINE RES_REJEIT    7    // Array de rejeitados (defines REJ_*)
 #DEFINE RES_SIZE      7
+
+// --- Posicoes de cada linha rejeitada (aRes[RES_REJEIT]) --------------------
+#DEFINE REJ_LINHA     1    // Numero da linha no arquivo
+#DEFINE REJ_CONTEUDO  2    // Conteudo original da linha
+#DEFINE REJ_MOTIVO    3    // Motivo da rejeicao
+#DEFINE REJ_PRODUTO   4    // Codigo do produto ("" quando ainda nao identificado)
 
 // --- Posicoes do dicionario em memoria (aDicio) -----------------------------
 #DEFINE DIC_CAMPO     1
@@ -412,7 +418,7 @@ Static Function IP01Inicia(cArquivo, nSepar, nCodif, lHeader, lAtualiz, lSimula,
         EndIf
     EndIf
 
-    IP01VerLog(cMsg, aRes[RES_LOG])
+    IP01VerLog(cMsg, aRes[RES_LOG], aRes[RES_REJEIT], cArqRej)
 
 Return Nil
 
@@ -452,16 +458,33 @@ Return lOk
 
 
 /*/{Protheus.doc} IP01VerLog
-Exibe em tela o resumo e o log detalhado da importacao.
+Exibe o resultado da importacao em duas abas: as linhas rejeitadas em um
+browse navegavel e o log completo em texto.
+
+O browse existe porque o usuario final normalmente nao tem acesso a pasta
+de log no servidor - assim ele identifica e corrige os erros sem depender
+de nenhum arquivo. O botao de salvar deixa a copia como conveniencia.
+
+@param cResumo Texto do resumo da importacao
+@param aLog    Linhas do log detalhado
+@param aRejeit Linhas rejeitadas (defines REJ_*)
+@param cArqRej Caminho do CSV de rejeitados no servidor
 /*/
-Static Function IP01VerLog(cResumo, aLog)
+Static Function IP01VerLog(cResumo, aLog, aRejeit, cArqRej)
 
     Local oDlg
+    Local oFolder
     Local oMemRes
     Local oMemLog
+    Local oBrwRej
+    Local oPnlRej
+    Local oPnlLog
+
     Local cTexto := ""
     Local nI     := 0
     Local nQtd   := 0
+
+    Local aAbas  := {"Rejeitados (" + cValToChar(Len(aRejeit)) + ")", "Log completo"}
 
     // Em cargas grandes o log tem uma linha por produto. Jogar tudo no memo
     // trava a tela, entao a exibicao e limitada - o arquivo .log tem o total
@@ -477,20 +500,80 @@ Static Function IP01VerLog(cResumo, aLog)
     Next nI
 
     DEFINE MSDIALOG oDlg TITLE "Resultado da Importacao de Produtos" ;
-           FROM 0, 0 TO 430, 800 PIXEL
+           FROM 0, 0 TO 490, 800 PIXEL
 
     @ 006, 005 SAY "Resumo:" SIZE 100, 08 PIXEL OF oDlg
-    @ 016, 005 GET oMemRes VAR cResumo MEMO SIZE 385, 062 PIXEL OF oDlg
+    @ 016, 005 GET oMemRes VAR cResumo MEMO SIZE 385, 060 PIXEL OF oDlg
     oMemRes:lReadOnly := .T.
 
-    @ 084, 005 SAY "Detalhamento linha a linha:" SIZE 150, 08 PIXEL OF oDlg
-    @ 094, 005 GET oMemLog VAR cTexto MEMO SIZE 385, 100 PIXEL OF oDlg
+    oFolder := TFolder():New(082, 005, aAbas, {}, oDlg, , , , .T., .F., 385, 130)
+
+    oPnlRej := oFolder:aDialogs[1]
+    oPnlLog := oFolder:aDialogs[2]
+
+    // ------------------------------------------------ aba 1: browse rejeitados
+    If Len(aRejeit) == 0
+        @ 010, 010 SAY "Nenhuma linha rejeitada. Todos os registros do arquivo " + ;
+                       "foram processados com sucesso." ;
+                    SIZE 350, 10 PIXEL OF oPnlRej
+    Else
+        @ 005, 005 LISTBOX oBrwRej FIELDS HEADER "Linha", "Produto", "Motivo da rejeicao" ;
+                   SIZE 372, 108 PIXEL OF oPnlRej
+        oBrwRej:SetArray(aRejeit)
+        oBrwRej:bLine := {|| {StrZero(aRejeit[oBrwRej:nAt][REJ_LINHA], 6)   , ;
+                              PadR(aRejeit[oBrwRej:nAt][REJ_PRODUTO], 15)   , ;
+                              aRejeit[oBrwRej:nAt][REJ_MOTIVO]              } }
+    EndIf
+
+    // --------------------------------------------------- aba 2: log completo
+    @ 005, 005 GET oMemLog VAR cTexto MEMO SIZE 372, 108 PIXEL OF oPnlLog
     oMemLog:lReadOnly := .T.
 
-    TButton():New(199, 340, "Fechar", oDlg, {|| oDlg:End() }, ;
+    // ------------------------------------------------------------- rodape
+    TButton():New(220, 005, "Salvar rejeitados na minha maquina", oDlg, ;
+                  {|| IP01SalvRej(cArqRej) }, ;
+                  120, 013, , , .F., .T., .F., , .F., , , .F.)
+
+    TButton():New(220, 340, "Fechar", oDlg, {|| oDlg:End() }, ;
                   050, 013, , , .F., .T., .F., , .F., , , .F.)
 
     ACTIVATE MSDIALOG oDlg CENTERED
+
+Return Nil
+
+
+/*/{Protheus.doc} IP01SalvRej
+Copia o CSV de rejeitados para uma pasta escolhida na maquina do usuario.
+
+Serve para quem nao tem acesso a pasta de log no servidor: o arquivo e
+levado ate a estacao por CpyS2T, sem depender de compartilhamento.
+
+@param cArqRej Caminho do CSV no servidor
+/*/
+Static Function IP01SalvRej(cArqRej)
+
+    Local cDir := ""
+
+    If Empty(cArqRej) .Or. !File(cArqRej)
+        MsgInfo("Nao ha arquivo de rejeitados para salvar - a importacao nao " + ;
+                "gerou nenhuma linha rejeitada.", "Salvar rejeitados")
+        Return Nil
+    EndIf
+
+    cDir := cGetFile("", "Escolha a pasta de destino na sua maquina", 0, ;
+                     "", .F., GETF_LOCALHARD + GETF_RETDIRECTORY, .F., .F.)
+
+    If Empty(cDir)
+        Return Nil
+    EndIf
+
+    If IP01Baixar(cArqRej, cDir)
+        MsgInfo("Arquivo de rejeitados salvo em:" + CRLF + CRLF + AllTrim(cDir), "Concluido")
+    Else
+        MsgStop("Nao foi possivel salvar o arquivo em:" + CRLF + AllTrim(cDir) + CRLF + CRLF + ;
+                "Verifique se a pasta existe e se voce tem permissao de escrita nela.", ;
+                "Salvar rejeitados")
+    EndIf
 
 Return Nil
 
@@ -626,7 +709,7 @@ Static Function IP01Proc(aCfg)
         If !Empty(cErro)
             aRes[RES_ERRO]++
             aAdd(aRes[RES_LOG], "Linha " + StrZero(nI, 6) + " REJEITADA (layout) : " + cErro)
-            aAdd(aRes[RES_REJEIT], {nI, cLinha, cErro})
+            aAdd(aRes[RES_REJEIT], {nI, cLinha, cErro, ""})
             Loop
         EndIf
 
@@ -637,7 +720,7 @@ Static Function IP01Proc(aCfg)
             aRes[RES_ERRO]++
             cErro := "Campo B1_COD nao informado."
             aAdd(aRes[RES_LOG], "Linha " + StrZero(nI, 6) + " REJEITADA .......: " + cErro)
-            aAdd(aRes[RES_REJEIT], {nI, cLinha, cErro})
+            aAdd(aRes[RES_REJEIT], {nI, cLinha, cErro, ""})
             Loop
         EndIf
 
@@ -648,7 +731,7 @@ Static Function IP01Proc(aCfg)
             aRes[RES_ERRO]++
             cErro := "Codigo " + AllTrim(cCodProd) + " duplicado dentro do arquivo."
             aAdd(aRes[RES_LOG], "Linha " + StrZero(nI, 6) + " REJEITADA .......: " + cErro)
-            aAdd(aRes[RES_REJEIT], {nI, cLinha, cErro})
+            aAdd(aRes[RES_REJEIT], {nI, cLinha, cErro, AllTrim(cCodProd)})
             Loop
         EndIf
         cCodArq += AllTrim(cCodProd) + "|"
@@ -693,7 +776,7 @@ Static Function IP01Proc(aCfg)
             cErro := aRetLin[2]
             aAdd(aRes[RES_LOG], "Linha " + StrZero(nI, 6) + " REJEITADA .......: " + ;
                                 AllTrim(cCodProd) + " -> " + cErro)
-            aAdd(aRes[RES_REJEIT], {nI, cLinha, cErro})
+            aAdd(aRes[RES_REJEIT], {nI, cLinha, cErro, AllTrim(cCodProd)})
         EndIf
 
     Next nI
@@ -1527,12 +1610,13 @@ Static Function IP01GrvRej(aCfg, aRes)
         Return ""
     EndIf
 
-    FWrite(nHdl, "LINHA;CONTEUDO_ORIGINAL;MOTIVO" + CRLF)
+    FWrite(nHdl, "LINHA;PRODUTO;MOTIVO;CONTEUDO_ORIGINAL" + CRLF)
 
     For nI := 1 To Len(aRes[RES_REJEIT])
-        FWrite(nHdl, cValToChar(aRes[RES_REJEIT][nI][1]) + ";" + ;
-                     IMP_ASPA + StrTran(aRes[RES_REJEIT][nI][2], IMP_ASPA, "") + IMP_ASPA + ";" + ;
-                     IMP_ASPA + StrTran(aRes[RES_REJEIT][nI][3], IMP_ASPA, "") + IMP_ASPA + CRLF)
+        FWrite(nHdl, cValToChar(aRes[RES_REJEIT][nI][REJ_LINHA]) + ";" + ;
+                     IMP_ASPA + aRes[RES_REJEIT][nI][REJ_PRODUTO] + IMP_ASPA + ";" + ;
+                     IMP_ASPA + StrTran(aRes[RES_REJEIT][nI][REJ_MOTIVO], IMP_ASPA, "") + IMP_ASPA + ";" + ;
+                     IMP_ASPA + StrTran(aRes[RES_REJEIT][nI][REJ_CONTEUDO], IMP_ASPA, "") + IMP_ASPA + CRLF)
     Next nI
 
     FClose(nHdl)

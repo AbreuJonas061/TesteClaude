@@ -165,8 +165,24 @@ processado como alteração do primeiro, mascarando um erro de origem.
 \imp_produtos\log\REJEITADOS_AAAAMMDD_HHMMSS.csv     linhas rejeitadas + motivo
 ```
 
-O CSV de rejeitados traz `LINHA;CONTEUDO_ORIGINAL;MOTIVO`, permitindo corrigir e
-reimportar somente o que falhou.
+O CSV de rejeitados traz `LINHA;PRODUTO;MOTIVO;CONTEUDO_ORIGINAL`, permitindo
+corrigir e reimportar somente o que falhou.
+
+### Tela de resultado
+
+Ao final a rotina abre uma janela com o resumo e duas abas:
+
+| Aba | Conteúdo |
+|---|---|
+| **Rejeitados (N)** | Browse navegável com linha, produto e motivo de cada rejeição |
+| **Log completo** | Log detalhado em texto (limitado a 500 linhas em tela) |
+
+O browse existe porque **o usuário final normalmente não tem acesso à pasta de
+log no servidor**. Com ele, dá para identificar e corrigir os erros direto na
+tela, sem depender de arquivo nenhum.
+
+O botão **"Salvar rejeitados na minha maquina"** permite escolher uma pasta na
+estação e levar o CSV até lá (`CpyS2T`) — é conveniência, não pré-requisito.
 
 ### Onde os logs ficam: servidor × sua máquina
 
