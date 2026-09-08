@@ -82,9 +82,9 @@ processamento em `IP01Proc()` ocorrem sempre no servidor.
 A primeira linha traz os **nomes técnicos dos campos**, em qualquer ordem:
 
 ```
-B1_COD;B1_DESC;B1_TIPO;B1_UM;B1_LOCPAD;B1_GRUPO;B1_POSIPI;B1_ORIGEM;B1_PRV1;B1_CUSTD;B1_PICM;B1_IPI
-PA000001;PARAFUSO SEXTAVADO 1/2 X 2;MP;PC;01;0001;73181500;0;12,50;8,30;18,00;5,00
-PA000002;"CABO FLEXIVEL 2,5MM; AZUL";MP;MT;01;0001;85444200;0;3,75;2,10;18,00;0,00
+B1_COD;B1_DESC;B1_TIPO;B1_UM;B1_SEGUM;B1_LOCPAD;B1_GRUPO;B1_POSIPI;B1_ORIGEM;B1_PRV1;B1_CUSTD;B1_PICM;B1_IPI;B1_CONTA
+PA000001;PARAFUSO SEXTAVADO 1/2 X 2;MP;PC;PC;01;0001;73181500;0;12,50;8,30;18,00;5,00;11010001
+PA000002;"CABO FLEXIVEL 2,5MM; AZUL";MP;MT;MT;01;0001;85444200;0;3,75;2,10;18,00;0,00;11010001
 ```
 
 **Vantagem:** para importar um campo novo basta acrescentar a coluna no arquivo —
@@ -300,6 +300,12 @@ SELECT X3_ARQUIVO, X3_CAMPO, X3_TITULO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_OBRI
 
 Os campos obrigatórios (`X3_OBRIGAT = 'S'`) precisam vir no arquivo ou ter valor
 padrão, senão o ExecAuto rejeita o registro.
+
+> **Na prática:** além dos campos "óbvios", duas exigências costumam aparecer só
+> na primeira carga real — **`B1_SEGUM`** (segunda unidade de medida) e
+> **`B1_CONTA`** (conta contábil). Ambos já constam do layout padrão. Se ao
+> preencher `B1_SEGUM` a base passar a exigir `B1_CONV` e `B1_TIPCONV` (fator e
+> tipo de conversão), acrescente-os também.
 
 **Produtos sem complemento SB5** (conferência pós-carga):
 
