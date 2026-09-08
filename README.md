@@ -1,4 +1,4 @@
-# IMPPRD01 — Importação de Produtos no Protheus via ExecAuto
+# zImpPro — Importação de Produtos no Protheus via ExecAuto
 
 Rotina em **ADVPL** para importar produtos (**SB1** e complemento **SB5**) a partir de
 arquivos **CSV** ou **TXT**, utilizando **`MSExecAuto` + `MATA010`**.
@@ -25,7 +25,7 @@ consistências do cadastro e pontos de entrada.
 ## Instalação rápida
 
 1. Compile `src/IMPPRD01.prw` no RPO.
-2. Cadastre no menu (SIGAMDI): **Programa** `U_IMPPRD01`, **Tipo** `Função Protheus`.
+2. Cadastre no menu (SIGAMDI): **Programa** `U_zImpPro`, **Tipo** `Função Protheus`.
 3. Crie a pasta `\imp_produtos\` no *rootpath* (a rotina cria automaticamente na 1ª execução).
 
 ## Como funciona o mapeamento de campos

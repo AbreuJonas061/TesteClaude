@@ -61,7 +61,7 @@ Rotina **ADVPL** de importação de produtos para o **Protheus 12.1.2410**.
 | `docs/MANUAL.md` | Manual de uso, layout e consultas SQL de apoio |
 | `exemplos/` | Arquivos CSV/TXT de exemplo nos dois modos de layout |
 
-Ponto de entrada: `U_IMPPRD01`, cadastrado no menu (SIGAMDI). Não usa
+Ponto de entrada: `U_zImpPro`, cadastrado no menu (SIGAMDI). Não usa
 Schedule/Job.
 
 ### Decisões de arquitetura que devem ser preservadas

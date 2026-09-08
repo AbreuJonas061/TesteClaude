@@ -1,4 +1,4 @@
-# Manual — IMPPRD01 (Importação de Produtos via ExecAuto)
+# Manual — zImpPro (Importação de Produtos via ExecAuto)
 
 Versão 1.00 · Protheus 12.1.2410 · SmartClient HTML (navegador)
 
@@ -8,7 +8,7 @@ Versão 1.00 · Protheus 12.1.2410 · SmartClient HTML (navegador)
 
 1. Compile `src/IMPPRD01.prw` no RPO do ambiente.
 2. Cadastre a rotina no menu (SIGAMDI):
-   - **Programa:** `U_IMPPRD01`
+   - **Programa:** `U_zImpPro`
    - **Tipo:** Função Protheus
    - **Módulo:** SIGAEST (Estoque/Custos) ou o de sua preferência
 3. Diretórios utilizados no *rootpath* do Protheus (criados automaticamente):
@@ -161,7 +161,7 @@ processado como alteração do primeiro, mascarando um erro de origem.
 - Ao final são gerados:
 
 ```
-\imp_produtos\log\IMPPRD01_AAAAMMDD_HHMMSS.log       log completo
+\imp_produtos\log\zImpPro_AAAAMMDD_HHMMSS.log        log completo
 \imp_produtos\log\REJEITADOS_AAAAMMDD_HHMMSS.csv     linhas rejeitadas + motivo
 ```
 
@@ -337,7 +337,7 @@ Acentuação saindo errada no log é sintoma de codificação: alterne a opção
 
 | Bloco | Funções |
 |---|---|
-| Entrada | `U_IMPPRD01` (ponto de entrada do menu) |
+| Entrada | `U_zImpPro` (ponto de entrada do menu) |
 | Manutenção | `IP01Layout` · `IP01Fixos` · `IP01Ignora` |
 | Interface | `IP01Tela` · `IP01Busca` · `IP01Inicia` · `IP01VerLog` |
 | Processamento | `IP01Proc` · `IP01Exec` · `IP01GetErr` |

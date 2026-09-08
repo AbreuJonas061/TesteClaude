@@ -4,7 +4,7 @@
 #Include "TBIConn.ch"
 
 /* ===========================================================================
-   IMPPRD01 - Importacao de Produtos (SB1/SB5) via ExecAuto MATA010
+   zImpPro - Importacao de Produtos (SB1/SB5) via ExecAuto MATA010
 
    Compativel com Protheus 12.1.2410 / SmartClient HTML (navegador).
 
@@ -80,16 +80,16 @@
 #DEFINE IMP_MAXLOG    500       // Linhas de log exibidas em tela (o arquivo traz tudo)
 
 
-/*/{Protheus.doc} IMPPRD01
+/*/{Protheus.doc} zImpPro
 Ponto de entrada da rotina. Abre a tela de parametrizacao da importacao.
 
-Cadastro no menu (SIGAMDI) -> Programa: U_IMPPRD01 / Tipo: Funcao Protheus
+Cadastro no menu (SIGAMDI) -> Programa: U_zImpPro / Tipo: Funcao Protheus
 
 @author  Jonas
 @since   09/2026
 @version 1.00
 /*/
-User Function IMPPRD01()
+User Function zImpPro()
 
     Local aArea := FWGetArea()
 
@@ -625,7 +625,7 @@ Static Function IP01Proc(aCfg)
     aRes[RES_REJEIT] := {}
 
     aAdd(aRes[RES_LOG], Replicate("=", 100))
-    aAdd(aRes[RES_LOG], "IMPPRD01 v" + IMP_VERSAO + " - Importacao de Produtos via ExecAuto (MATA010)")
+    aAdd(aRes[RES_LOG], "zImpPro v" + IMP_VERSAO + " - Importacao de Produtos via ExecAuto (MATA010)")
     aAdd(aRes[RES_LOG], "Inicio ...: " + DToC(Date()) + " " + Time())
     aAdd(aRes[RES_LOG], "Arquivo ..: " + aCfg[CFG_ARQUIVO])
     aAdd(aRes[RES_LOG], "Empresa ..: " + FWCodEmp() + " / Filial: " + FWCodFil())
@@ -1562,11 +1562,11 @@ Static Function IP01GrvLog(aCfg, aRes)
 
     IP01MkDir(cDir)
 
-    cArq := cDir + "IMPPRD01_" + DToS(Date()) + "_" + StrTran(Time(), ":", "") + ".log"
+    cArq := cDir + "zImpPro_" + DToS(Date()) + "_" + StrTran(Time(), ":", "") + ".log"
     nHdl := FCreate(cArq)
 
     If nHdl == -1
-        ConOut("[IMPPRD01] Nao foi possivel criar o log: " + cArq + ;
+        ConOut("[zImpPro] Nao foi possivel criar o log: " + cArq + ;
                " (FError " + cValToChar(FError()) + ")")
         Return ""
     EndIf
