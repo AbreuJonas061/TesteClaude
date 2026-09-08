@@ -54,16 +54,23 @@ do layout do fonte), **Importar** e **Sair**.
 
 ### Como o arquivo chega ao servidor
 
-O botão `...` abre `cGetFile()` com `GETF_LOCALHARD`, que no SmartClient HTML
-sempre abre o seletor nativo do **navegador na máquina de quem está usando o
-sistema** — nunca o disco do servidor. Ao escolher o arquivo, o próprio
-framework transfere o conteúdo para uma área temporária do AppServer e devolve
-um caminho já válido para leitura no servidor.
+O botão `...` abre `cGetFile()` com `GETF_LOCALHARD`, que abre o seletor nativo
+na **máquina de quem está usando o sistema** — nunca o disco do servidor. O que
+acontece depois depende do SmartClient:
 
-Para manter o arquivo junto dos logs da importação (e disponível mesmo depois
-que a área temporária for limpa), a rotina copia esse arquivo para
-`\imp_produtos\`, com o nome prefixado por `up_AAAAMMDD_HHMMSS_`. Toda a
-leitura e o processamento em `IP01Proc()` ocorrem exclusivamente no servidor.
+| SmartClient | Comportamento |
+|---|---|
+| **HTML (navegador)** | O framework transfere o arquivo para uma área temporária do AppServer e devolve um caminho já legível no servidor. Nada a fazer. |
+| **Desktop (exe)** | O caminho devolvido é da estação; a rotina traz o arquivo para `\imp_produtos\` com `CpyT2S()`. |
+
+A rotina detecta o caso testando `File()` sobre o caminho devolvido: se o
+AppServer já enxerga o arquivo, usa direto; senão, transfere. A leitura e o
+processamento em `IP01Proc()` ocorrem sempre no servidor.
+
+> Não é usado `__CopyFile()`: funções com prefixo `__` são de uso interno e o
+> compilador AdvPL já emite o aviso `W9910`, que virará erro em versões futuras.
+> `CpyT2S()` é a função documentada para transferir da estação para o servidor —
+> note que o 2º parâmetro dela é o **diretório** de destino, não o nome do arquivo.
 
 ---
 

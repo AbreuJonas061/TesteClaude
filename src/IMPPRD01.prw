@@ -267,13 +267,18 @@ Return Nil
 /*/{Protheus.doc} IP01Busca
 Abre a selecao de arquivo na maquina do usuario (estacao/navegador).
 
-No SmartClient HTML, cGetFile() com GETF_LOCALHARD abre o dialogo nativo
-do navegador na maquina LOCAL de quem esta usando o sistema; o arquivo
-escolhido e transferido automaticamente para uma area temporaria no
-servidor, e o caminho retornado ja e valido para leitura no AppServer.
+cGetFile() com GETF_LOCALHARD abre o dialogo nativo na maquina LOCAL de
+quem esta usando o sistema - nunca o disco do servidor. O que acontece em
+seguida depende do SmartClient:
 
-Para manter o arquivo organizado junto dos logs (e disponivel apos a
-limpeza da area temporaria), ele e copiado para \imp_produtos\.
+   HTML (navegador) . o proprio framework transfere o arquivo para uma
+                      area temporaria do AppServer e devolve um caminho
+                      ja legivel no servidor;
+   Desktop (exe) .... o caminho devolvido e da estacao e precisa ser
+                      trazido para o servidor por CpyT2S().
+
+A leitura sempre ocorre no servidor, entao a funcao garante que o caminho
+devolvido seja acessivel pelo AppServer nos dois casos.
 
 @param cAtual Caminho atualmente informado
 @return cRet  Caminho do arquivo, ja no servidor
@@ -282,20 +287,29 @@ Static Function IP01Busca(cAtual)
 
     Local cRet  := AllTrim(cAtual)
     Local cArq  := ""
-    Local cDest := ""
     Local cMasc := "Arquivos CSV|*.csv|Arquivos TXT|*.txt|Todos|*.*"
 
     cArq := cGetFile(cMasc, "Selecione o arquivo de produtos", 0, ;
                      "", .F., GETF_LOCALHARD, .F., .F.)
 
-    If !Empty(cArq)
-        cDest := IMP_DIRPAD + "up_" + DToS(dDataBase) + "_" + ;
-                 StrTran(Time(), ":", "") + "_" + IP01NmArq(cArq)
-        If __CopyFile(cArq, cDest)
-            cRet := cDest
-        Else
-            cRet := cArq    // usa a copia temporaria feita pelo proprio cGetFile
-        EndIf
+    If Empty(cArq)
+        Return PadR(cRet, 250)
+    EndIf
+
+    // O AppServer ja enxerga o arquivo: nada a transferir
+    If File(cArq)
+        Return PadR(cArq, 250)
+    EndIf
+
+    // Caminho da estacao - traz para o servidor (destino e o DIRETORIO)
+    IP01MkDir(IMP_DIRPAD)
+
+    If CpyT2S(cArq, IMP_DIRPAD, .F.)
+        cRet := IMP_DIRPAD + IP01NmArq(cArq)
+    Else
+        MsgStop("Nao foi possivel transferir o arquivo para o servidor." + CRLF + CRLF + ;
+                "Copie o arquivo para " + IMP_DIRPAD + " no servidor e informe " + ;
+                "esse caminho diretamente no campo Arquivo.", "Transferencia")
     EndIf
 
 Return PadR(cRet, 250)
