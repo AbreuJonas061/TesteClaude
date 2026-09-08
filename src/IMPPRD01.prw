@@ -679,9 +679,24 @@ Static Function IP01Proc(aCfg)
                         " campo(s)   |   SB5 (complemento) = " + ;
                         cValToChar(IP01CntTab(aMapa, "SB5")) + " campo(s)")
     aAdd(aRes[RES_LOG], "Campos ...: " + IP01LstCpo(aMapa))
+    aAdd(aRes[RES_LOG], "Linhas ...: " + cValToChar(Len(aLinhas)) + " lida(s) do arquivo")
     aAdd(aRes[RES_LOG], Replicate("-", 100))
 
     nTotal := Len(aLinhas) - (nIniDado - 1)
+
+    // Sem isso a rotina encerraria em silencio: o laco abaixo simplesmente
+    // nao executa quando nao ha linha de dados depois do cabecalho
+    If nTotal <= 0
+        cErro := "O arquivo nao tem nenhuma linha de dados." + CRLF + CRLF + ;
+                 "Foram lidas " + cValToChar(Len(aLinhas)) + " linha(s) no total" + ;
+                 IIf(aCfg[CFG_HEADER], ", e a primeira foi usada como cabecalho.", ".") + CRLF + CRLF + ;
+                 "Verifique se o arquivo realmente possui produtos abaixo do " + ;
+                 "cabecalho e se foi salvo como CSV (e nao como planilha)."
+        aAdd(aRes[RES_LOG], "ERRO FATAL: arquivo sem linhas de dados.")
+        MsgStop(cErro, "Nada a importar")
+        FWRestArea(aArea)
+        Return aRes
+    EndIf
 
     ProcRegua(nTotal)
 
@@ -907,10 +922,12 @@ quanto a codificacao e BOM.
 Static Function IP01LerArq(aCfg, cErro)
 
     Local aLin   := {}
+    Local aBloco := {}
     Local oFile
-    Local cLinha := ""
+    Local cBloco := ""
     Local cArq   := aCfg[CFG_ARQUIVO]
     Local lPrim  := .T.
+    Local nJ     := 0
 
     cErro := ""
 
@@ -928,21 +945,25 @@ Static Function IP01LerArq(aCfg, cErro)
 
     While !oFile:EoF()
 
-        cLinha := oFile:GetLine()
+        cBloco := oFile:GetLine()
 
         // Remove o BOM da primeira linha, quando existir
         If lPrim
-            If SubStr(cLinha, 1, 3) == IMP_BOM
-                cLinha := SubStr(cLinha, 4)
+            If SubStr(cBloco, 1, 3) == IMP_BOM
+                cBloco := SubStr(cBloco, 4)
             EndIf
             lPrim := .F.
         EndIf
 
-        cLinha := StrTran(cLinha, Chr(13), "")
-        cLinha := StrTran(cLinha, Chr(10), "")
-        cLinha := IP01Codif(cLinha, aCfg[CFG_CODIF])
+        // GetLine normalmente devolve uma linha, mas quando o terminador do
+        // arquivo nao e o esperado pelo reader vem mais de uma de uma vez.
+        // Por isso o conteudo e QUEBRADO por CR/LF: apenas remover os
+        // separadores grudaria o arquivo inteiro em uma unica linha.
+        aBloco := IP01Quebra(cBloco)
 
-        aAdd(aLin, cLinha)
+        For nJ := 1 To Len(aBloco)
+            aAdd(aLin, IP01Codif(aBloco[nJ], aCfg[CFG_CODIF]))
+        Next nJ
 
     EndDo
 
@@ -954,6 +975,39 @@ Static Function IP01LerArq(aCfg, cErro)
     EndDo
 
 Return aLin
+
+
+/*/{Protheus.doc} IP01Quebra
+Quebra um texto em linhas, aceitando os tres terminadores possiveis:
+CRLF (Windows), LF (Unix) e CR sozinho.
+
+Nao usa IP01Split de proposito: aquela funcao trata aspas e as remove, o
+que estragaria a protecao do separador dentro de campos entre aspas.
+
+@param cTexto Texto a quebrar
+@return aRet  Array de linhas
+/*/
+Static Function IP01Quebra(cTexto)
+
+    Local aRet := {}
+    Local cAux := cTexto
+    Local nPos := 0
+
+    // Normaliza os terminadores para LF
+    cAux := StrTran(cAux, Chr(13) + Chr(10), Chr(10))
+    cAux := StrTran(cAux, Chr(13), Chr(10))
+
+    nPos := At(Chr(10), cAux)
+
+    While nPos > 0
+        aAdd(aRet, SubStr(cAux, 1, nPos - 1))
+        cAux := SubStr(cAux, nPos + 1)
+        nPos := At(Chr(10), cAux)
+    EndDo
+
+    aAdd(aRet, cAux)
+
+Return aRet
 
 
 /*/{Protheus.doc} IP01Codif
