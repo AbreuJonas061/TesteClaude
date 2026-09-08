@@ -47,7 +47,8 @@ que a importação em lote fique travada esperando alguém clicar em "OK".
 | **Primeira linha contém os nomes dos campos** | Marcado = mapeamento dinâmico pelo cabeçalho (padrão) |
 | **Atualizar produtos já cadastrados** | Desmarcado = produto existente é apenas ignorado |
 | **Somente simular** | Valida o arquivo inteiro **sem gravar nada** |
-| **Dir. log** | Destino do log e do arquivo de rejeitados |
+| **Log (servidor)** | Onde o log é gravado **no AppServer** (`FCreate` sempre grava no servidor) |
+| **Copiar p/ (estação)** | Pasta na **sua máquina** para onde o log é copiado ao final. Em branco = não copia |
 
 Botões: **Gerar arquivo modelo** (cria `\imp_produtos\MODELO_PRODUTOS.csv` a partir
 do layout do fonte), **Importar** e **Sair**.
@@ -166,6 +167,31 @@ processado como alteração do primeiro, mascarando um erro de origem.
 
 O CSV de rejeitados traz `LINHA;CONTEUDO_ORIGINAL;MOTIVO`, permitindo corrigir e
 reimportar somente o que falhou.
+
+### Onde os logs ficam: servidor × sua máquina
+
+**`FCreate()`/`FWrite()` sempre gravam no AppServer, nunca na estação.** Um caminho
+como `C:\Erros Protheus` digitado no campo *Log (servidor)* aponta para o disco C
+**do servidor** — só coincide com a sua máquina se o AppServer rodar localmente.
+
+Por isso existem dois campos separados:
+
+| Campo | Onde grava | Função usada |
+|---|---|---|
+| **Log (servidor)** | AppServer, dentro do *rootpath* | `FCreate` / `FWrite` |
+| **Copiar p/ (estação)** | Sua máquina | `CpyS2T()` |
+
+Ao final da importação o log e o CSV de rejeitados são copiados para a pasta
+informada no segundo campo (padrão `C:\Erros Protheus`, definido na constante
+`IMP_DIRESTA`). O resumo em tela informa se a cópia foi concluída.
+
+Dois detalhes importantes:
+
+- **A pasta precisa existir na sua máquina.** `MakeDir()` criaria no servidor,
+  não na estação — então crie-a manualmente uma vez.
+- **No SmartClient HTML (navegador)** a transferência é tratada como download
+  pelo browser, que pode salvar na pasta de *Downloads* em vez do caminho
+  informado. No SmartClient desktop o caminho é respeitado.
 
 **Sugestão de uso:** rode primeiro com **"Somente simular"** marcado. Isso valida
 layout, dicionário, tipos, tamanhos e duplicidades sem gravar nada.

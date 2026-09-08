@@ -63,6 +63,11 @@
 #DEFINE IMP_VERSAO    "1.00"
 #DEFINE IMP_DIRPAD    "\imp_produtos\"
 #DEFINE IMP_DIRLOG    "\imp_produtos\log\"
+
+// Pasta na ESTACAO (maquina do usuario) para onde o log e os rejeitados sao
+// copiados ao final. FCreate grava no servidor, entao a copia e feita por
+// CpyS2T. Deixe vazio para nao copiar.
+#DEFINE IMP_DIRESTA   "C:\Erros Protheus"
 #DEFINE IMP_TAB       Chr(9)
 #DEFINE IMP_ASPA      Chr(34)
 #DEFINE IMP_BOM       Chr(239) + Chr(187) + Chr(191)
@@ -178,6 +183,7 @@ Static Function IP01Tela()
     Local oFont
     Local oGetArq
     Local oGetLog
+    Local oGetEst
     Local oCboSep
     Local oCboCod
     Local oChkHea
@@ -188,6 +194,7 @@ Static Function IP01Tela()
 
     Local cArquivo  := Space(250)
     Local cDirLog   := PadR(IMP_DIRLOG, 250)
+    Local cDirEst   := PadR(IMP_DIRESTA, 250)
 
     Local nSepar    := 1
     Local nCodif    := 1
@@ -208,7 +215,7 @@ Static Function IP01Tela()
     oFont := TFont():New("Arial", , -12, .T., .T.)
 
     DEFINE MSDIALOG oDlg TITLE "Importacao de Produtos via ExecAuto - versao " + IMP_VERSAO ;
-           FROM 0, 0 TO 200, 700 PIXEL
+           FROM 0, 0 TO 230, 700 PIXEL
 
     nLin := 8
     @ nLin, 010 SAY "Importacao de produtos (SB1/SB5) com as validacoes nativas do Protheus" ;
@@ -244,16 +251,24 @@ Static Function IP01Tela()
                 SIZE 300, 09 PIXEL OF oDlg
 
     nLin += 20
-    @ nLin, 010 SAY "Dir. log:" SIZE 042, 08 PIXEL OF oDlg
-    @ nLin - 1, 055 MSGET oGetLog VAR cDirLog SIZE 240, 10 PIXEL OF oDlg
+    @ nLin, 010 SAY "Log (servidor):" SIZE 060, 08 PIXEL OF oDlg
+    @ nLin - 1, 072 MSGET oGetLog VAR cDirLog SIZE 223, 10 PIXEL OF oDlg
 
-    nLin += 22
+    nLin += 15
+    @ nLin, 010 SAY "Copiar p/ (estacao):" SIZE 060, 08 PIXEL OF oDlg
+    @ nLin - 1, 072 MSGET oGetEst VAR cDirEst SIZE 223, 10 PIXEL OF oDlg
+
+    nLin += 12
+    @ nLin, 072 SAY "Deixe em branco para nao copiar o log para a sua maquina." ;
+                SIZE 240, 08 PIXEL OF oDlg
+
+    nLin += 20
     TButton():New(nLin, 010, "Gerar arquivo modelo", oDlg, {|| IP01Modelo() }, ;
                   078, 013, , , .F., .T., .F., , .F., , , .F.)
 
     TButton():New(nLin, 195, "Importar", oDlg, ;
                   {|| IP01Inicia(cArquivo, nSepar, nCodif, ;
-                                 lHeader, lAtualiz, lSimula, cDirLog) }, ;
+                                 lHeader, lAtualiz, lSimula, cDirLog, cDirEst) }, ;
                   058, 013, , , .F., .T., .F., , .F., , , .F.)
 
     TButton():New(nLin, 258, "Sair", oDlg, {|| oDlg:End() }, ;
@@ -318,13 +333,15 @@ Return PadR(cRet, 250)
 /*/{Protheus.doc} IP01Inicia
 Valida os parametros da tela, dispara o processamento com regua e exibe o log.
 /*/
-Static Function IP01Inicia(cArquivo, nSepar, nCodif, lHeader, lAtualiz, lSimula, cDirLog)
+Static Function IP01Inicia(cArquivo, nSepar, nCodif, lHeader, lAtualiz, lSimula, cDirLog, cDirEst)
 
     Local aCfg    := Array(CFG_SIZE)
     Local aRes    := {}
     Local cArqLog := ""
     Local cArqRej := ""
     Local cMsg    := ""
+    Local cEst    := AllTrim(cDirEst)
+    Local nCopia  := 0
 
     If Empty(cArquivo)
         MsgStop("Informe o arquivo a ser importado.", "Atencao")
@@ -375,14 +392,63 @@ Static Function IP01Inicia(cArquivo, nSepar, nCodif, lHeader, lAtualiz, lSimula,
     cMsg += "Alterados ......: " + cValToChar(aRes[RES_ALTERA]) + CRLF
     cMsg += "Ignorados ......: " + cValToChar(aRes[RES_IGNORA]) + CRLF
     cMsg += "Rejeitados .....: " + cValToChar(aRes[RES_ERRO])   + CRLF + CRLF
-    cMsg += "Arquivo de log .: " + cArqLog + CRLF
+    cMsg += "No servidor ....: " + cArqLog + CRLF
     If !Empty(cArqRej)
-        cMsg += "Rejeitados .....: " + cArqRej + CRLF
+        cMsg += "                  " + cArqRej + CRLF
+    EndIf
+
+    // Copia log e rejeitados para a maquina do usuario
+    If !Empty(cEst)
+        nCopia += IIf(IP01Baixar(cArqLog, cEst), 1, 0)
+        nCopia += IIf(IP01Baixar(cArqRej, cEst), 1, 0)
+
+        cMsg += CRLF
+        If nCopia > 0
+            cMsg += "Na sua maquina .: " + cEst + ;
+                    "  (" + cValToChar(nCopia) + " arquivo(s))" + CRLF
+        Else
+            cMsg += "ATENCAO: nao foi possivel copiar o log para " + cEst + CRLF + ;
+                    "Verifique se a pasta existe na sua maquina." + CRLF
+        EndIf
     EndIf
 
     IP01VerLog(cMsg, aRes[RES_LOG])
 
 Return Nil
+
+
+/*/{Protheus.doc} IP01Baixar
+Copia um arquivo gerado no servidor para uma pasta na maquina do usuario.
+
+FCreate/FWrite sempre gravam no AppServer, entao o log nasce no servidor.
+CpyS2T() e a funcao documentada para leva-lo ate a estacao (o segundo
+parametro e o DIRETORIO de destino, nao o nome do arquivo).
+
+A pasta precisa existir na estacao - MakeDir criaria no servidor, nao la.
+No SmartClient HTML o navegador trata a transferencia como download e pode
+salvar na pasta de downloads do browser, ignorando o caminho informado.
+
+@param cArqServ Caminho completo do arquivo no servidor
+@param cDirEsta Diretorio de destino na estacao
+@return lOk     .T. quando a copia foi concluida
+/*/
+Static Function IP01Baixar(cArqServ, cDirEsta)
+
+    Local lOk  := .F.
+    Local cDir := AllTrim(cDirEsta)
+
+    If Empty(cArqServ) .Or. Empty(cDir) .Or. !File(cArqServ)
+        Return .F.
+    EndIf
+
+    // CpyS2T espera o diretorio sem a barra final
+    If Right(cDir, 1) == "\"
+        cDir := SubStr(cDir, 1, Len(cDir) - 1)
+    EndIf
+
+    lOk := CpyS2T(cArqServ, cDir, .T.)
+
+Return lOk
 
 
 /*/{Protheus.doc} IP01VerLog
