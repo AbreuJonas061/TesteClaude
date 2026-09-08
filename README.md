@@ -1,4 +1,13 @@
-# zImpPro — Importação de Produtos no Protheus via ExecAuto
+# Rotinas ADVPL — Protheus 12.1.2410
+
+| Rotina | Menu | O que faz |
+|---|---|---|
+| [`zImpPro`](#zimppro--importação-de-produtos-via-execauto) | `U_zImpPro` | Importa produtos (SB1/SB5) de CSV/TXT via `MSExecAuto` + `MATA010` |
+| [`zAudEst`](#zaudest--auditoria-de-roteiro--estrutura) | `U_zAudEst` | Audita estrutura (SG1) e roteiro (SG2) de toda a árvore de um item |
+
+---
+
+# zImpPro — Importação de Produtos via ExecAuto
 
 Rotina em **ADVPL** para importar produtos (**SB1** e complemento **SB5**) a partir de
 arquivos **CSV** ou **TXT**, utilizando **`MSExecAuto` + `MATA010`**.
@@ -65,3 +74,49 @@ cabeçalho) configurado na função `IP01Layout()`.
 - Log em arquivo + **CSV de rejeitados com o motivo**, pronto para corrigir e reimportar.
 
 Detalhes completos em [`docs/MANUAL.md`](docs/MANUAL.md).
+
+---
+
+# zAudEst — Auditoria de Roteiro / Estrutura
+
+Rotina em **ADVPL** que explode a estrutura de um item (**SG1**), confere o roteiro
+(**SG2**) e o cadastro (**SB1**) em toda a árvore e gera um relatório no padrão de
+auditoria usado pela engenharia.
+
+**Somente leitura** — não faz `INSERT`, `UPDATE` nem `DELETE`. O único efeito é a
+criação dos arquivos de saída.
+
+- Requer **SQL Server**: a explosão usa CTE recursiva.
+- Saída: **HTML** (abre no navegador, imprime em PDF, abre no Word) e, opcionalmente,
+  um **CSV analítico** com a árvore inteira.
+- O resultado também aparece em tela, em abas de *Erros* e *Verificar*, para quem
+  não tem acesso à pasta do servidor.
+
+## O que ele aponta
+
+| Natureza | Regra |
+|---|---|
+| Estrutura | PA/PI (e BN/EM com estrutura) precisam descer até uma folha válida — MP, SV ou BN/EM sem estrutura |
+| Roteiro | PA/PI sempre exigem SG2, exceto o PA `FIN*` (Finame); EM/BN só se tiverem estrutura; MP/SV não exigem |
+| Quantidade | 15 códigos de chapa exigem `UM = KG` e quantidade até o peso de uma chapa 3000x1200; `UM = MM` acima de 6000 é erro |
+| Verificar | Item bloqueado, e revisão consultada diferente de `B1_REVATU` no item principal |
+
+## Instalação rápida
+
+1. Compile `src/AUDEST01.prw` no RPO.
+2. Cadastre no menu (SIGAMDI): **Programa** `U_zAudEst`, **Tipo** `Função Protheus`.
+3. A pasta `\aud_estrut\relatorio\` é criada na 1ª execução.
+
+## Manutenção
+
+Três funções no início do fonte concentram o que normalmente muda — a lista de
+chapas com teto, a regra de roteiro/folha por tipo e os textos dos critérios:
+
+```advpl
+AE01Chapas()   // 15 codigos de chapa e o peso de uma chapa 3000x1200
+AE01Regras()   // por tipo: quando exige roteiro e quando e folha valida
+AE01Criter()   // textos do quadro "CRITERIOS DE ANALISE"
+```
+
+Detalhes completos — incluindo o mapa do que ficou no SQL e o que foi para o
+ADVPL — em [`docs/MANUAL_AUDEST.md`](docs/MANUAL_AUDEST.md).

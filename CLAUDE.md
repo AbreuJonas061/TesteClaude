@@ -53,18 +53,18 @@ trabalho da empresa fica na máquina local do Jonas, em
 
 ## Sobre o projeto
 
-Rotina **ADVPL** de importação de produtos para o **Protheus 12.1.2410**.
+Rotinas **ADVPL** para o **Protheus 12.1.2410**. Cada rotina é um fonte único,
+cadastrado no menu (SIGAMDI). Nenhuma usa Schedule/Job.
 
 | Caminho | Conteúdo |
 |---|---|
-| `src/IMPPRD01.prw` | Fonte único da rotina (tela + processamento) |
-| `docs/MANUAL.md` | Manual de uso, layout e consultas SQL de apoio |
+| `src/IMPPRD01.prw` | `zImpPro` — importação de produtos (tela + processamento) |
+| `src/AUDEST01.prw` | `zAudEst` — auditoria de roteiro/estrutura (tela + query + relatório) |
+| `docs/MANUAL.md` | Manual do `zImpPro` |
+| `docs/MANUAL_AUDEST.md` | Manual do `zAudEst` |
 | `exemplos/` | Arquivos CSV/TXT de exemplo nos dois modos de layout |
 
-Ponto de entrada: `U_zImpPro`, cadastrado no menu (SIGAMDI). Não usa
-Schedule/Job.
-
-### Decisões de arquitetura que devem ser preservadas
+### zImpPro — decisões de arquitetura que devem ser preservadas
 
 - **Gravação exclusivamente por `MSExecAuto` + `MATA010`.** Nunca gravar com
   `RecLock`/`Replace` — o objetivo da rotina é justamente passar por todas as
@@ -81,14 +81,34 @@ Schedule/Job.
 - **Mapeamento dinâmico pelo cabeçalho do arquivo:** incluir um campo novo na
   carga não deve exigir recompilação do fonte.
 
-### Manutenção concentrada
-
 Três funções no início do fonte concentram o que normalmente se altera:
 
 ```advpl
 IP01Layout()   // ordem das colunas no modo sem cabeçalho
 IP01Fixos()    // valores fixos aplicados a todos os registros
 IP01Ignora()   // colunas do arquivo que devem ser desprezadas
+```
+
+### zAudEst — decisões de arquitetura que devem ser preservadas
+
+- **Somente leitura.** Nenhum `INSERT`/`UPDATE`/`DELETE`, nenhuma gravação em
+  tabela do Protheus. O único efeito é a criação dos arquivos de saída.
+- **A query da engenharia é a fonte da verdade.** A CTE recursiva, a vigência
+  (`G1_INI`/`G1_FIM`), a faixa de revisão (`G1_REVINI`/`G1_REVFIM`) e os `EXISTS`
+  de SG1/SG2 ficam no SQL, em `AE01Sql()`, iguais ao original.
+- **`Situacao`/`Motivo` são transcrição literal dos `CASE`**, em `AE01Class()`, na
+  mesma ordem de avaliação. A ordem é a regra — não reordenar as cláusulas.
+- **`TemFilho` não volta para o SQL.** Lá era um `EXISTS` contra a própria CTE
+  recursiva, e o SQL Server reexecuta a recursão a cada linha.
+- **Relatório em HTML gerado pela própria rotina**, com o texto fixo em entidades
+  HTML — assim a acentuação não depende da codificação do AppServer.
+
+Três funções no início do fonte concentram o que normalmente se altera:
+
+```advpl
+AE01Chapas()   // 15 códigos de chapa e o peso de uma chapa 3000x1200
+AE01Regras()   // por tipo: quando exige roteiro e quando é folha válida
+AE01Criter()   // textos do quadro "CRITÉRIOS DE ANÁLISE"
 ```
 
 ---
