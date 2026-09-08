@@ -34,13 +34,16 @@ O modo padrão usa a **primeira linha do arquivo como cabeçalho**, com os nomes
 técnicos dos campos:
 
 ```
-B1_COD;B1_DESC;B1_TIPO;B1_UM;B1_LOCPAD;B1_PRV1
-PA000001;PARAFUSO SEXTAVADO;MP;PC;01;12,50
+B1_COD;B1_DESC;B1_TIPO;B1_UM;B1_SEGUM;B1_LOCPAD;B1_PRV1;B1_CONTA
+PA000001;PARAFUSO SEXTAVADO;MP;PC;PC;01;12,50;11010001
 ```
 
 > Para importar um campo novo **não é preciso alterar nem recompilar o fonte** —
 > basta acrescentar a coluna no arquivo. A rotina lê o SX3 das tabelas SB1/SB5,
 > valida a existência do campo e converte o conteúdo para o tipo correto.
+
+`B1_SEGUM` (segunda unidade de medida) e `B1_CONTA` (conta contábil) costumam ser
+obrigatórios no dicionário — sem eles o ExecAuto rejeita todos os registros.
 
 Também é aceito o **título do dicionário** no lugar do nome técnico
 (`Descricao` em vez de `B1_DESC`), e existe o modo de **layout fixo** (sem
