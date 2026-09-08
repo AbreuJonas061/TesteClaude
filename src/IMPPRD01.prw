@@ -2,6 +2,7 @@
 #Include "FileIO.ch"
 #Include "TopConn.ch"
 #Include "TBIConn.ch"
+#Include "Set.ch"
 
 /* ===========================================================================
    zImpPro - Importacao de Produtos (SB1/SB5) via ExecAuto MATA010
@@ -614,6 +615,7 @@ Static Function IP01Proc(aCfg)
     Local nIniDado := 1
     Local nTotal   := 0
     Local nTamCod  := TamSX3("B1_COD")[1]
+    Local nRecDel  := 0
 
     Local lExiste  := .F.
 
@@ -761,6 +763,24 @@ Static Function IP01Proc(aCfg)
             Loop
         EndIf
 
+        // O DbSeek acima ignora registros excluidos, mas a chave continua
+        // ocupada no indice unico do banco. Sem esta checagem a inclusao seria
+        // recusada la na frente com "Item ja existe com a chave informada",
+        // mensagem que nao deixa claro que a causa e um registro excluido.
+        If !lExiste
+            nRecDel := IP01RecDel(cCodProd)
+            If nRecDel > 0
+                aRes[RES_ERRO]++
+                cErro := "Codigo " + AllTrim(cCodProd) + " ja pertence a um registro " + ;
+                         "EXCLUIDO no SB1 (R_E_C_N_O_ " + cValToChar(nRecDel) + "). " + ;
+                         "A chave continua reservada no banco: use outro codigo ou " + ;
+                         "solicite a limpeza do registro excluido."
+                aAdd(aRes[RES_LOG], "Linha " + StrZero(nI, 6) + " REJEITADA .......: " + cErro)
+                aAdd(aRes[RES_REJEIT], {nI, cLinha, cErro, AllTrim(cCodProd)})
+                Loop
+            EndIf
+        EndIf
+
         nOpcAuto := IIf(lExiste, 4, 3)    // 3 = Inclusao / 4 = Alteracao
 
         // Simulacao: valida o layout e nao chama o ExecAuto
@@ -809,6 +829,40 @@ Static Function IP01Proc(aCfg)
     FWRestArea(aArea)
 
 Return aRes
+
+
+/*/{Protheus.doc} IP01RecDel
+Informa se o codigo do produto pertence a um registro EXCLUIDO no SB1.
+
+A exclusao no Protheus e logica (D_E_L_E_T_ = "*"), entao o DbSeek comum
+nao enxerga o registro - mas a chave continua ocupada no indice unico do
+banco e o MATA010 recusa a inclusao. Detectar isso aqui transforma um
+"Item ja existe com a chave informada" em uma mensagem acionavel.
+
+A leitura de excluidos e feita desligando DELETED apenas durante a busca,
+restaurando o estado anterior em seguida.
+
+@param cCodProd Codigo do produto
+@return nRec    R_E_C_N_O_ do registro excluido, ou 0 quando nao existe
+/*/
+Static Function IP01RecDel(cCodProd)
+
+    Local nRec     := 0
+    Local aArea    := SB1->(GetArea())
+    Local lDelAnt  := Set(_SET_DELETED)
+
+    Set(_SET_DELETED, .F.)
+
+    SB1->(DbSetOrder(1))
+
+    If SB1->(DbSeek(xFilial("SB1") + cCodProd)) .And. SB1->(Deleted())
+        nRec := SB1->(Recno())
+    EndIf
+
+    Set(_SET_DELETED, lDelAnt)
+    SB1->(RestArea(aArea))
+
+Return nRec
 
 
 /*/{Protheus.doc} IP01Exec
