@@ -52,6 +52,28 @@ Se o cadastro na tela exige `B5_CEME`, acrescente a coluna:
 ...;11010001;9092026
 ```
 
+#### Campos preenchidos automaticamente
+
+Alguns campos do complemento repetem informação que já está no produto. Em vez
+de digitar duas vezes na planilha, `IP01Copia()` faz a cópia:
+
+```advpl
+Static Function IP01Copia()
+    Local aCop := {}
+    //         Destino     Origem
+    aAdd(aCop, {"B5_COD"  , "B1_COD" })    // chave do complemento
+    aAdd(aCop, {"B5_CEME" , "B1_DESC"})
+Return aCop
+```
+
+Com isso, um arquivo que traga apenas `B1_COD` e `B1_DESC` chega ao ExecAuto
+com `B5_COD` e `B5_CEME` já preenchidos.
+
+- Vale só para campos **texto**.
+- Se o conteúdo não couber no destino, é **truncado** no tamanho do dicionário.
+- **A coluna do arquivo sempre vence**: informando `B5_CEME` no CSV, a cópia
+  não é aplicada.
+
 Para ver os campos de complemento disponíveis:
 
 ```sql
@@ -169,11 +191,11 @@ arquivo sempre tem prioridade.
 
 | Bloco | Funções |
 |---|---|
-| Entrada | `zImpPro` · `IP01Fixos` |
+| Entrada | `zImpPro` · `IP01Fixos` · `IP01Copia` |
 | Tela | `IP01Tela` · `IP01Busca` · `IP01Importa` |
 | Processamento | `IP01Proc` · `IP01Exec` · `IP01Erro` · `IP01Tag` · `IP01Rejeita` |
 | Arquivo | `IP01LerArq` · `IP01EhUtf8` · `IP01Quebra` · `IP01Separ` · `IP01Split` |
-| Layout | `IP01Mapa` · `IP01Dicio` · `IP01Reg` · `IP01Conv` · `IP01Num` · `IP01Data` |
+| Layout | `IP01Mapa` · `IP01Dicio` · `IP01Reg` · `IP01PrepCop` · `IP01Conv` · `IP01Num` · `IP01Data` |
 | Resultado | `IP01Result` · `IP01Log` · `IP01RecDel` |
 
 ---

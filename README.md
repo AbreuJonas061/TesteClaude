@@ -31,6 +31,9 @@ PA000001;PARAFUSO SEXTAVADO;MP;PC;PC;01;12,50;11010001;9092026
 Campos do complemento (**`B5_*`**) entram no mesmo arquivo, junto dos `B1_*` —
 o `MATA010` grava as duas tabelas de uma vez. Não é preciso um segundo ExecAuto.
 
+`B5_COD` e `B5_CEME` são preenchidos automaticamente a partir de `B1_COD` e
+`B1_DESC` (configurável em `IP01Copia()`), então não precisam ir no arquivo.
+
 - Para importar um campo novo, **acrescente a coluna** — sem recompilar o fonte.
 - `B1_COD` é o único obrigatório para a rotina; o resto quem exige é o dicionário.
 - Coluna que não existe no dicionário é **ignorada** e listada no resumo (não trava

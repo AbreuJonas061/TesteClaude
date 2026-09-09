@@ -82,6 +82,27 @@ Static Function IP01Fixos()
 Return aFix
 
 
+/*/{Protheus.doc} IP01Copia
+Campos preenchidos com o conteudo de outro campo do mesmo produto.
+
+Evita repetir a mesma informacao em duas colunas da planilha. So valem
+para campos texto, e o conteudo e truncado no tamanho do destino quando
+necessario. Uma coluna vinda do arquivo sempre tem prioridade sobre a
+copia.
+
+@return aCop Array de {cDestino, cOrigem}
+/*/
+Static Function IP01Copia()
+
+    Local aCop := {}
+
+    //         Destino     Origem
+    aAdd(aCop, {"B5_COD"  , "B1_COD" })    // chave do complemento
+    aAdd(aCop, {"B5_CEME" , "B1_DESC"})
+
+Return aCop
+
+
 // ===========================================================================
 // TELA
 // ===========================================================================
@@ -203,6 +224,7 @@ Static Function IP01Proc(cArq, lSimula, lAtualiz)
     Local aCampos := {}
     Local aIgnora := {}
     Local aRetLin := {}
+    Local aCopia  := IP01PrepCop()
 
     Local cSepar  := ""
     Local cErro   := ""
@@ -277,7 +299,7 @@ Static Function IP01Proc(cArq, lSimula, lAtualiz)
         aRes[RES_LIDAS]++
 
         cErro   := ""
-        aCampos := IP01Reg(aLinhas[nI], cSepar, aMapa, @cErro)
+        aCampos := IP01Reg(aLinhas[nI], cSepar, aMapa, aCopia, @cErro)
 
         If !Empty(cErro)
             IP01Rejeita(aRes, nI, "", cErro)
@@ -791,15 +813,17 @@ Monta o array de campos do ExecAuto a partir de uma linha do arquivo.
 Coluna vazia e omitida de proposito: na inclusao o MATA010 aplica o padrao
 do dicionario e na alteracao preserva o conteudo atual.
 /*/
-Static Function IP01Reg(cLinha, cSepar, aMapa, cErro)
+Static Function IP01Reg(cLinha, cSepar, aMapa, aCopia, cErro)
 
     Local aCpo   := {}
     Local aCols  := IP01Split(cLinha, cSepar)
     Local aFixos := IP01Fixos()
     Local cValor := ""
+    Local cAux   := ""
     Local xValor
     Local nI     := 0
     Local nCol   := 0
+    Local nPos   := 0
 
     cErro := ""
 
@@ -828,6 +852,25 @@ Static Function IP01Reg(cLinha, cSepar, aMapa, cErro)
 
     Next nI
 
+    // Campos derivados de outro campo - o arquivo tem prioridade
+    For nI := 1 To Len(aCopia)
+
+        If aScan(aCpo, {|x| x[1] == aCopia[nI][1]}) > 0
+            Loop
+        EndIf
+
+        nPos := aScan(aCpo, {|x| x[1] == aCopia[nI][2]})
+
+        If nPos > 0 .And. ValType(aCpo[nPos][2]) == "C"
+            cAux := AllTrim(aCpo[nPos][2])
+            If Len(cAux) > aCopia[nI][3]
+                cAux := Left(cAux, aCopia[nI][3])
+            EndIf
+            aAdd(aCpo, {aCopia[nI][1], cAux, Nil})
+        EndIf
+
+    Next nI
+
     For nI := 1 To Len(aFixos)
         If aScan(aCpo, {|x| x[1] == aFixos[nI][1]}) == 0
             aAdd(aCpo, {aFixos[nI][1], aFixos[nI][2], Nil})
@@ -835,6 +878,32 @@ Static Function IP01Reg(cLinha, cSepar, aMapa, cErro)
     Next nI
 
 Return aCpo
+
+
+/*/{Protheus.doc} IP01PrepCop
+Resolve o tamanho de cada campo de destino uma unica vez, antes do laco de
+linhas - consultar o dicionario a cada produto pesaria em cargas grandes.
+
+Campos que nao existem no dicionario sao descartados aqui, para nao chegar
+ao ExecAuto.
+
+@return aRet Array de {cDestino, cOrigem, nTamanho}
+/*/
+Static Function IP01PrepCop()
+
+    Local aCop := IP01Copia()
+    Local aRet := {}
+    Local aTam := {}
+    Local nI   := 0
+
+    For nI := 1 To Len(aCop)
+        aTam := TamSX3(aCop[nI][1])
+        If ValType(aTam) == "A" .And. Len(aTam) > 0 .And. aTam[1] > 0
+            aAdd(aRet, {aCop[nI][1], aCop[nI][2], aTam[1]})
+        EndIf
+    Next nI
+
+Return aRet
 
 
 /*/{Protheus.doc} IP01Conv
