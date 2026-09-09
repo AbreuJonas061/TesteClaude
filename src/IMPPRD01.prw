@@ -3,12 +3,14 @@
 #Include "Set.ch"
 
 /* ===========================================================================
-   zImpPro - Importacao de Produtos (SB1/SB5) via ExecAuto MATA010
+   zImpPro - Importacao de Produtos (SB1/SB5) via ExecAuto
 
    Protheus 12.1.2410 / SmartClient HTML (navegador).
 
-   A gravacao e feita exclusivamente por MSExecAuto + MATA010, entao todo
-   produto passa pelas validacoes nativas do cadastro.
+   A gravacao e feita exclusivamente por MSExecAuto, entao todo produto passa
+   pelas validacoes nativas do cadastro. Sao duas rotinas automaticas, na
+   mesma transacao: MATA010 para o produto (SB1) e MATA180 para o complemento
+   (SB5) - no 12.1.2410 o MATA010 e MVC e nao aceita campos B5_ no seu array.
 
    O arquivo (CSV ou TXT) precisa ter a PRIMEIRA LINHA com os nomes tecnicos
    dos campos. Para importar um campo novo basta acrescentar a coluna - nao e
@@ -384,19 +386,45 @@ Return Nil
 
 
 /*/{Protheus.doc} IP01Exec
-Grava o produto pelo MATA010 em modo automatico.
+Grava o produto e o complemento, cada um pela sua rotina automatica.
 
-@param nOpc 3 = inclusao / 4 = alteracao
+No 12.1.2410 o MATA010 e MVC e seu modelo so conhece campos de SB1 -
+enviar um campo B5_ ali resulta em "O id de formulario 'B5_xxx' nao e
+valido". O complemento tem rotina propria, MATA180, e por isso os campos
+sao separados por prefixo e gravados em duas chamadas.
+
+As duas ficam na mesma transacao: se o complemento falhar, o produto
+tambem e desfeito, evitando SB1 sem o SB5 correspondente.
+
+@param nOpc 3 = inclusao / 4 = alteracao (do produto)
 @return aRet {lOk, cErro}
 /*/
 Static Function IP01Exec(aCampos, nOpc, cCod)
 
-    Local aRet    := {.T., ""}
-    Local cFunOld := FunName()
+    Local aRet     := {.T., ""}
+    Local aProduto := {}
+    Local aCompl   := {}
+    Local cFunOld  := FunName()
+    Local nI       := 0
+    Local nOpcB5   := 3
 
     Private lMsErroAuto    := .F.
     Private lMsHelpAuto    := .T.
     Private lAutoErrNoFile := .T.
+
+    // Separa o que e produto do que e complemento
+    For nI := 1 To Len(aCampos)
+        If Left(aCampos[nI][1], 3) == "B5_"
+            aAdd(aCompl, aCampos[nI])
+        Else
+            aAdd(aProduto, aCampos[nI])
+        EndIf
+    Next nI
+
+    // B5_COD e a chave do complemento; sem ele o MATA180 nao sabe onde gravar
+    If Len(aCompl) > 0 .And. aScan(aCompl, {|x| x[1] == "B5_COD"}) == 0
+        aAdd(aCompl, {"B5_COD", cCod, Nil})
+    EndIf
 
     If nOpc == 4
         DbSelectArea("SB1")
@@ -406,14 +434,34 @@ Static Function IP01Exec(aCampos, nOpc, cCod)
         EndIf
     EndIf
 
-    SetFunName("MATA010")
+    // O complemento pode nao existir mesmo em produto ja cadastrado, entao a
+    // opcao dele e decidida pelo proprio SB5
+    If Len(aCompl) > 0
+        DbSelectArea("SB5")
+        SB5->(DbSetOrder(1))
+        nOpcB5 := IIf(SB5->(DbSeek(xFilial("SB5") + cCod)), 4, 3)
+    EndIf
 
     Begin Transaction
-        MSExecAuto({|x, y| MATA010(x, y)}, aCampos, nOpc)
+
+        SetFunName("MATA010")
+        MSExecAuto({|x, y| MATA010(x, y)}, aProduto, nOpc)
+
         If lMsErroAuto
             DisarmTransaction()
             aRet := {.F., IP01Erro()}
+        ElseIf Len(aCompl) > 0
+
+            SetFunName("MATA180")
+            MSExecAuto({|x, y| MATA180(x, y)}, aCompl, nOpcB5)
+
+            If lMsErroAuto
+                DisarmTransaction()
+                aRet := {.F., "Complemento: " + IP01Erro()}
+            EndIf
+
         EndIf
+
     End Transaction
 
     If !aRet[1]
@@ -810,8 +858,8 @@ Return aDic
 /*/{Protheus.doc} IP01Reg
 Monta o array de campos do ExecAuto a partir de uma linha do arquivo.
 
-Coluna vazia e omitida de proposito: na inclusao o MATA010 aplica o padrao
-do dicionario e na alteracao preserva o conteudo atual.
+Coluna vazia e omitida de proposito: na inclusao a rotina automatica aplica
+o padrao do dicionario e na alteracao preserva o conteudo atual.
 /*/
 Static Function IP01Reg(cLinha, cSepar, aMapa, aCopia, cErro)
 

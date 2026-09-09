@@ -41,9 +41,15 @@ PA000001;PARAFUSO SEXTAVADO;MP;PC;PC;01;0001;12,50;11010001;9092026
 
 ### Complemento do produto (SB5)
 
-Os campos `B5_*` vão **no mesmo arquivo e no mesmo `MSExecAuto`** dos `B1_*`.
-O `MATA010` grava SB1 e SB5 numa única chamada — **não existe (nem é preciso)
-uma rotina automática separada para o SB5**.
+Os campos `B5_*` vão **no mesmo arquivo** que os `B1_*`, mas são gravados por
+uma **rotina automática própria**: a rotina separa os campos por prefixo e
+chama `MATA010` (produto) e `MATA180` (complemento) na mesma transação.
+
+Isso é necessário porque no 12.1.2410 o `MATA010` é MVC e seu modelo só conhece
+campos de SB1 — mandar um `B5_` ali resulta em
+`O id de formulário 'B5_COD' não é válido`.
+
+Se o complemento falhar, o produto também é desfeito: não fica SB1 sem SB5.
 
 Se o cadastro na tela exige `B5_CEME`, acrescente a coluna:
 
@@ -147,6 +153,7 @@ SELECT NNR_CODIGO FROM NNRXXX WHERE D_E_L_E_T_='';                              
 |---|---|
 | Código não existe | Inclusão (`MATA010`, `nOpc = 3`) |
 | Existe e "Atualizar" marcado | Alteração (`nOpc = 4`) |
+| Complemento (SB5) | Opção decidida separadamente: produto já cadastrado pode não ter SB5 |
 | Existe e "Atualizar" desmarcado | Contado como "já existia" |
 | Código de produto **excluído** | Rejeitado com o número do registro |
 

@@ -66,9 +66,13 @@ Schedule/Job.
 
 ### Decisões de arquitetura que devem ser preservadas
 
-- **Gravação exclusivamente por `MSExecAuto` + `MATA010`.** Nunca gravar com
+- **Gravação exclusivamente por `MSExecAuto`.** Nunca gravar com
   `RecLock`/`Replace` — o objetivo da rotina é justamente passar por todas as
   validações nativas (`X3_VALID`, gatilhos, pontos de entrada).
+- **Duas rotinas automáticas, na mesma transação:** `MATA010` para o produto
+  (SB1) e `MATA180` para o complemento (SB5). No 12.1.2410 o MATA010 é MVC e
+  seu modelo **não aceita campos `B5_`** — enviá-los ali causa
+  "O id de formulário 'B5_xxx' não é válido".
 - **Erro capturado com `GetAutoGRLog()`**, nunca `MostraErro()`, que travaria a
   carga em lote esperando interação.
 - **Transação por registro:** uma linha rejeitada não derruba as demais.
