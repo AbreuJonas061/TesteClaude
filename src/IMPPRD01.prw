@@ -553,8 +553,13 @@ Static Function IP01Erro(aCampos, cBruto)
         cErro += IP01Amigo(aMsgs[nI][2], aMsgs[nI][1], aCampos)
     Next nI
 
+    // Nem todo bloco traz "Mensagem do erro:". Quando nao traz, sobram os
+    // identificadores - e eles dizem de onde veio a recusa.
     If Empty(cErro)
-        // Formato inesperado: devolve o texto bruto, ainda melhor que nada
+        cErro := IP01Origem(cTudo)
+    EndIf
+
+    If Empty(cErro)
         cErro := AllTrim(Left(cTudo, 250))
     EndIf
 
@@ -563,6 +568,52 @@ Static Function IP01Erro(aCampos, cBruto)
     EndIf
 
 Return cErro
+
+
+/*/{Protheus.doc} IP01Origem
+Monta a mensagem a partir dos identificadores, quando o log nao traz texto
+de erro.
+
+Acontece nas validacoes do modelo MVC: o log informa qual formulario e qual
+etapa recusaram, sem descrever o motivo. Saber que a recusa veio da
+pos-validacao ja direciona a investigacao, e e melhor do que devolver o log
+cru truncado.
+
+@param cTudo Log do ExecAuto em uma linha
+@return cRet Mensagem, ou "" quando nao ha identificadores
+/*/
+Static Function IP01Origem(cTudo)
+
+    Local cRet  := ""
+    Local cForm := IP01Tag(cTudo, "Id do formulario de origem:")
+    Local cCpo  := IP01Tag(cTudo, "Id do campo de origem:")
+    Local cUpper:= Upper(cCpo)
+
+    If Empty(cForm) .And. Empty(cCpo)
+        Return ""
+    EndIf
+
+    Do Case
+        Case "VLDDATA_POST" $ cUpper
+            cRet := "Recusado na validacao final do cadastro, feita depois de " + ;
+                    "preencher todos os campos. Costuma ser regra de negocio ou " + ;
+                    "ponto de entrada (MT010TOK)"
+
+        Case "VLDDATA_PRE" $ cUpper
+            cRet := "Recusado antes da gravacao, na validacao inicial do cadastro"
+
+        Case "VLDDATA" $ cUpper .Or. "OBRIGAT" $ cUpper
+            cRet := "Recusado pela validacao de dados do cadastro"
+
+        Otherwise
+            cRet := "Recusado pelo cadastro"
+            cRet += IIf(Empty(cCpo), "", " na etapa " + cCpo)
+    EndCase
+
+    cRet += IIf(Empty(cForm), "", " (formulario " + cForm + ")")
+    cRet += ". Sem detalhe no log - veja o console.log do servidor"
+
+Return cRet
 
 
 /*/{Protheus.doc} IP01Amigo
