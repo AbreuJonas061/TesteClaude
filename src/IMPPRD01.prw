@@ -46,6 +46,9 @@
 #DEFINE REJ_LINHA    1
 #DEFINE REJ_PRODUTO  2
 #DEFINE REJ_MOTIVO   3
+#DEFINE REJ_DETALHE  4    // log bruto do ExecAuto, so vai para o arquivo
+
+#DEFINE IMP_MAXDET   2000 // limite do log bruto guardado por linha
 
 
 /*/{Protheus.doc} zImpPro
@@ -364,7 +367,7 @@ Static Function IP01Proc(cArq, lSimula, lAtualiz)
                 aRes[RES_ALTEROU]++
             EndIf
         Else
-            IP01Rejeita(aRes, nI, AllTrim(cCod), aRetLin[2])
+            IP01Rejeita(aRes, nI, AllTrim(cCod), aRetLin[2], aRetLin[3])
         EndIf
 
     Next nI
@@ -377,10 +380,12 @@ Return aRes
 /*/{Protheus.doc} IP01Rejeita
 Registra uma linha rejeitada no resultado.
 /*/
-Static Function IP01Rejeita(aRes, nLinha, cProduto, cMotivo)
+Static Function IP01Rejeita(aRes, nLinha, cProduto, cMotivo, cDetalhe)
+
+    Default cDetalhe := ""
 
     aRes[RES_ERROS]++
-    aAdd(aRes[RES_REJEIT], {nLinha, cProduto, cMotivo})
+    aAdd(aRes[RES_REJEIT], {nLinha, cProduto, cMotivo, cDetalhe})
 
 Return Nil
 
@@ -401,10 +406,11 @@ tambem e desfeito, evitando SB1 sem o SB5 correspondente.
 /*/
 Static Function IP01Exec(aCampos, nOpc, cCod)
 
-    Local aRet     := {.T., ""}
+    Local aRet     := {.T., "", ""}
     Local aProduto := {}
     Local aCompl   := {}
     Local cFunOld  := FunName()
+    Local cBruto   := ""
     Local nI       := 0
     Local nOpcB5   := 3
 
@@ -430,7 +436,7 @@ Static Function IP01Exec(aCampos, nOpc, cCod)
         DbSelectArea("SB1")
         SB1->(DbSetOrder(1))
         If !SB1->(DbSeek(xFilial("SB1") + cCod))
-            Return {.F., "Produto nao localizado para alteracao."}
+            Return {.F., "Produto nao localizado para alteracao.", ""}
         EndIf
     EndIf
 
@@ -449,7 +455,7 @@ Static Function IP01Exec(aCampos, nOpc, cCod)
 
         If lMsErroAuto
             DisarmTransaction()
-            aRet := {.F., IP01Erro()}
+            aRet := {.F., IP01Erro(@cBruto), cBruto}
         ElseIf Len(aCompl) > 0
 
             SetFunName("MATA180")
@@ -457,7 +463,7 @@ Static Function IP01Exec(aCampos, nOpc, cCod)
 
             If lMsErroAuto
                 DisarmTransaction()
-                aRet := {.F., "Complemento: " + IP01Erro()}
+                aRet := {.F., "Complemento: " + IP01Erro(@cBruto), cBruto}
             EndIf
 
         EndIf
@@ -483,7 +489,7 @@ ExecAuto costuma repetir a mesma varias vezes - aparecem uma unica vez.
 
 @return cErro Mensagem enxuta
 /*/
-Static Function IP01Erro()
+Static Function IP01Erro(cBruto)
 
     Local aLog   := GetAutoGRLog()
     Local aMsgs  := {}
@@ -505,6 +511,11 @@ Static Function IP01Erro()
 
     cTudo := StrTran(cTudo, Chr(13), " ")
     cTudo := StrTran(cTudo, Chr(10), " ")
+
+    // O log completo vai para o arquivo e para o console: quando a extracao
+    // abaixo nao reconhece o formato, e nele que esta a resposta
+    cBruto := AllTrim(Left(cTudo, IMP_MAXDET))
+    ConOut("[zImpPro] " + cBruto)
 
     // O ExecAuto repete a mesma mensagem em varios blocos, e nem todos trazem
     // a origem. Por isso cada mensagem e guardada uma unica vez, ficando com o
@@ -1203,6 +1214,12 @@ Static Function IP01Log(aRes, lSimula)
             FWrite(nHdl, "Linha " + StrZero(aRej[nI][REJ_LINHA], 6) + " " + ;
                          PadR(aRej[nI][REJ_PRODUTO], 20) + " " + ;
                          aRej[nI][REJ_MOTIVO] + CRLF)
+
+            // Log bruto do ExecAuto: e aqui que esta a resposta quando a
+            // mensagem resumida nao explica a recusa
+            If !Empty(aRej[nI][REJ_DETALHE])
+                FWrite(nHdl, "       ExecAuto: " + aRej[nI][REJ_DETALHE] + CRLF)
+            EndIf
         Next nI
     EndIf
 
