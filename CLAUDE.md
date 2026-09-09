@@ -59,7 +59,7 @@ Rotina **ADVPL** de importação de produtos para o **Protheus 12.1.2410**.
 |---|---|
 | `src/IMPPRD01.prw` | Fonte único da rotina (tela + processamento) |
 | `docs/MANUAL.md` | Manual de uso, layout e consultas SQL de apoio |
-| `exemplos/` | Arquivos CSV/TXT de exemplo nos dois modos de layout |
+| `exemplos/PRODUTOS_MODELO.csv` | Arquivo de exemplo |
 
 Ponto de entrada: `U_zImpPro`, cadastrado no menu (SIGAMDI). Não usa
 Schedule/Job.
@@ -87,13 +87,16 @@ Schedule/Job.
 
 ### Manutenção concentrada
 
-Três funções no início do fonte concentram o que normalmente se altera:
+Duas funções no início do fonte concentram o que normalmente se altera:
 
 ```advpl
-IP01Layout()   // ordem das colunas no modo sem cabeçalho
-IP01Fixos()    // valores fixos aplicados a todos os registros
-IP01Ignora()   // colunas do arquivo que devem ser desprezadas
+IP01Fixos()    // valores fixos aplicados a todos os produtos
+IP01Copia()    // campos preenchidos a partir de outro campo (B5_CEME <- B1_DESC)
 ```
+
+**Não existe lista fixa de campos no fonte.** Quais campos entram na carga é
+definido pelo cabeçalho do arquivo — acrescentar ou remover uma coluna do CSV
+não exige recompilar.
 
 ---
 

@@ -24,12 +24,13 @@ detectados automaticamente.
 A primeira linha traz os **nomes técnicos dos campos**, em qualquer ordem:
 
 ```
-B1_COD;B1_DESC;B1_TIPO;B1_UM;B1_SEGUM;B1_LOCPAD;B1_PRV1;B1_CONTA;B5_CEME
-PA000001;PARAFUSO SEXTAVADO;MP;PC;PC;01;12,50;11010001;9092026
+B1_COD;B1_DESC;B1_TIPO;B1_UM;B1_SEGUM;B1_LOCPAD;B1_GRUPO;B1_CONTA
+PA000001;PARAFUSO SEXTAVADO;MP;PC;PC;01;0001;11010001
 ```
 
-Campos do complemento (**`B5_*`**) entram no mesmo arquivo, junto dos `B1_*` —
-o `MATA010` grava as duas tabelas de uma vez. Não é preciso um segundo ExecAuto.
+Campos do complemento (**`B5_*`**) podem ir no mesmo arquivo: a rotina separa
+por prefixo e chama `MATA010` (produto) e `MATA180` (complemento) na mesma
+transação — no 12.1.2410 o MATA010 é MVC e não aceita campos `B5_`.
 
 `B5_COD` e `B5_CEME` são preenchidos automaticamente a partir de `B1_COD` e
 `B1_DESC` (configurável em `IP01Copia()`), então não precisam ir no arquivo.

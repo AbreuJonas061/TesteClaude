@@ -35,8 +35,8 @@ conteúdo — o usuário não precisa saber informar.
 Primeira linha com os **nomes técnicos dos campos**, em qualquer ordem:
 
 ```
-B1_COD;B1_DESC;B1_TIPO;B1_UM;B1_SEGUM;B1_LOCPAD;B1_GRUPO;B1_PRV1;B1_CONTA;B5_CEME
-PA000001;PARAFUSO SEXTAVADO;MP;PC;PC;01;0001;12,50;11010001;9092026
+B1_COD;B1_DESC;B1_TIPO;B1_UM;B1_SEGUM;B1_LOCPAD;B1_GRUPO;B1_POSIPI;B1_ORIGEM;B1_CONTA
+PA000001;PARAFUSO SEXTAVADO;MP;PC;PC;01;0001;73181500;0;11010001
 ```
 
 ### Complemento do produto (SB5)
@@ -210,10 +210,13 @@ arquivo sempre tem prioridade.
 ## 8. Conferir no banco
 
 ```sql
-SELECT B1_COD, B1_DESC, B1_TIPO, B1_UM, B1_SEGUM, B1_LOCPAD,
-       B1_GRUPO, B1_POSIPI, B1_ORIGEM, B1_PRV1, B1_CUSTD,
-       B1_PICM, B1_IPI, B1_CONTA
-  FROM SB1XXX
- WHERE D_E_L_E_T_ = ''
- ORDER BY R_E_C_N_O_ DESC;
+SELECT b1.B1_COD, b1.B1_DESC, b1.B1_TIPO, b1.B1_UM, b1.B1_SEGUM,
+       b1.B1_LOCPAD, b1.B1_GRUPO, b1.B1_POSIPI, b1.B1_ORIGEM, b1.B1_CONTA,
+       b5.B5_CEME
+  FROM SB1XXX b1
+  LEFT JOIN SB5XXX b5 ON b5.B5_FILIAL = b1.B1_FILIAL
+                     AND b5.B5_COD    = b1.B1_COD
+                     AND b5.D_E_L_E_T_ = ''
+ WHERE b1.D_E_L_E_T_ = ''
+ ORDER BY b1.R_E_C_N_O_ DESC;
 ```
