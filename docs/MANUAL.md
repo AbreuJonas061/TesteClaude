@@ -170,13 +170,30 @@ produto e o motivo**, já em linguagem direta:
 
 ```
 Linha  Produto      O que aconteceu
-2      PA000001     B1_SEGUM: O campo Seg.Un.Medi. nao foi preenchido
+2      PA000001     B1_SEGUM (Seg.Un.Medi.): nao foi preenchido - inclua esta coluna no arquivo
+3      PA000002     B1_UM (Unidade Medida) = "XX": este valor nao esta cadastrado no sistema
+4      PA000003     Produto ja existe no sistema externo - recusado pela INTEGRACAO, nao pelo Protheus
 5      PA000004     Este codigo pertence a um produto EXCLUIDO (registro 148828)
 ```
 
 O log bruto do ExecAuto traz uma dezena de campos de rastreio (`Id do formulario
 de origem`, `Valor anterior`…) que tornam a mensagem ilegível. `IP01Erro()`
-extrai apenas o campo e a mensagem, e elimina repetições.
+extrai o campo e a mensagem e elimina repetições; `IP01Amigo()` acrescenta o
+**título do campo**, o **valor que foi enviado** e a **ação esperada**.
+
+Motivos reconhecidos:
+
+| O ExecAuto diz | A tela mostra |
+|---|---|
+| "não foi preenchido" / OBRIGAT | `CAMPO (Título): nao foi preenchido - inclua esta coluna no arquivo` |
+| "não cadastrado" / "não existe" | `CAMPO (Título) = "valor": este valor nao esta cadastrado no sistema` |
+| "inválido" | `CAMPO (Título) = "valor": valor recusado pela validacao do campo` |
+| "já existe" sem campo | `Produto ja existe no sistema externo - recusado pela INTEGRACAO, nao pelo Protheus` |
+
+Motivo não reconhecido mantém o texto original, com campo e valor na frente — um
+texto técnico é melhor que uma tradução que perca informação.
+
+O log completo continua no arquivo (linha `ExecAuto:`) e no `console.log`.
 
 Cada linha roda em transação própria: uma rejeitada não derruba as demais.
 

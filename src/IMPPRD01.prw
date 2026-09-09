@@ -455,7 +455,7 @@ Static Function IP01Exec(aCampos, nOpc, cCod)
 
         If lMsErroAuto
             DisarmTransaction()
-            aRet := {.F., IP01Erro(@cBruto), cBruto}
+            aRet := {.F., IP01Erro(aProduto, @cBruto), cBruto}
         ElseIf Len(aCompl) > 0
 
             SetFunName("MATA180")
@@ -463,7 +463,7 @@ Static Function IP01Exec(aCampos, nOpc, cCod)
 
             If lMsErroAuto
                 DisarmTransaction()
-                aRet := {.F., "Complemento: " + IP01Erro(@cBruto), cBruto}
+                aRet := {.F., "Complemento: " + IP01Erro(aCompl, @cBruto), cBruto}
             EndIf
 
         EndIf
@@ -489,7 +489,7 @@ ExecAuto costuma repetir a mesma varias vezes - aparecem uma unica vez.
 
 @return cErro Mensagem enxuta
 /*/
-Static Function IP01Erro(cBruto)
+Static Function IP01Erro(aCampos, cBruto)
 
     Local aLog   := GetAutoGRLog()
     Local aMsgs  := {}
@@ -550,8 +550,7 @@ Static Function IP01Erro(cBruto)
 
     For nI := 1 To Len(aMsgs)
         cErro += IIf(Empty(cErro), "", " | ")
-        cErro += IIf(Empty(aMsgs[nI][2]), "", aMsgs[nI][2] + ": ")
-        cErro += aMsgs[nI][1]
+        cErro += IP01Amigo(aMsgs[nI][2], aMsgs[nI][1], aCampos)
     Next nI
 
     If Empty(cErro)
@@ -564,6 +563,90 @@ Static Function IP01Erro(cBruto)
     EndIf
 
 Return cErro
+
+
+/*/{Protheus.doc} IP01Amigo
+Reescreve a recusa do ExecAuto em termos que o usuario entenda.
+
+A mensagem crua diz o que o Protheus reclamou, mas nao o que fazer, e
+identifica o campo pelo nome tecnico. Aqui entram o titulo do dicionario,
+o valor que foi enviado e, para os motivos mais comuns, a acao esperada.
+Motivo nao reconhecido mantem o texto original - melhor um texto tecnico
+do que uma traducao que perca a informacao.
+
+@param cCampo  Campo com erro, ou a origem (INTEGRACAO, OBRIGAT...)
+@param cMsg    Mensagem do ExecAuto
+@param aCampos Campos enviados, de onde sai o valor recusado
+@return cRet   Mensagem para a tela
+/*/
+Static Function IP01Amigo(cCampo, cMsg, aCampos)
+
+    Local cRet   := ""
+    Local cTit   := ""
+    Local cValor := ""
+    Local cUpper := Upper(cMsg)
+    Local nPos   := 0
+
+    // Origem sem campo: tipicamente recusa de integracao
+    If Empty(cCampo) .Or. !("_" $ cCampo)
+        If "JA EXISTE" $ cUpper
+            Return "Produto ja existe no sistema externo - recusado pela " + ;
+                   IIf(Empty(cCampo), "integracao", cCampo) + ", nao pelo Protheus"
+        EndIf
+        Return IIf(Empty(cCampo), "", cCampo + ": ") + cMsg
+    EndIf
+
+    cTit := IP01Titulo(cCampo)
+    nPos := aScan(aCampos, {|x| x[1] == cCampo})
+
+    If nPos > 0 .And. ValType(aCampos[nPos][2]) == "C"
+        cValor := AllTrim(aCampos[nPos][2])
+    EndIf
+
+    // Identificacao do campo: nome tecnico com o titulo ao lado
+    cRet := cCampo + IIf(Empty(cTit), "", " (" + cTit + ")")
+
+    Do Case
+        Case "NAO FOI PREENCHIDO" $ cUpper .Or. "OBRIGAT" $ cUpper
+            cRet += ": nao foi preenchido - inclua esta coluna no arquivo"
+
+        Case "NAO CADASTRAD" $ cUpper .Or. "NAO EXISTE" $ cUpper .Or. ;
+             "INEXISTENTE" $ cUpper
+            cRet += IIf(Empty(cValor), "", ' = "' + cValor + '"')
+            cRet += ": este valor nao esta cadastrado no sistema"
+
+        Case "INVALID" $ cUpper
+            cRet += IIf(Empty(cValor), "", ' = "' + cValor + '"')
+            cRet += ": valor recusado pela validacao do campo"
+
+        Otherwise
+            cRet += IIf(Empty(cValor), "", ' = "' + cValor + '"')
+            cRet += ": " + cMsg
+    EndCase
+
+Return cRet
+
+
+/*/{Protheus.doc} IP01Titulo
+Titulo do campo no dicionario. Usado so na montagem de mensagens de erro,
+entao a consulta ao SX3 por campo nao pesa no processamento.
+/*/
+Static Function IP01Titulo(cCampo)
+
+    Local cRet  := ""
+    Local aArea := SX3->(GetArea())
+    Local nOrd  := SX3->(IndexOrd())
+
+    SX3->(DbSetOrder(2))    // X3_CAMPO
+
+    If SX3->(DbSeek(PadR(cCampo, Len(SX3->X3_CAMPO))))
+        cRet := AllTrim(X3Titulo())
+    EndIf
+
+    SX3->(DbSetOrder(nOrd))
+    SX3->(RestArea(aArea))
+
+Return cRet
 
 
 /*/{Protheus.doc} IP01TemNum
