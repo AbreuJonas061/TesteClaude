@@ -35,8 +35,30 @@ conteúdo — o usuário não precisa saber informar.
 Primeira linha com os **nomes técnicos dos campos**, em qualquer ordem:
 
 ```
-B1_COD;B1_DESC;B1_TIPO;B1_UM;B1_SEGUM;B1_LOCPAD;B1_GRUPO;B1_PRV1;B1_CONTA
-PA000001;PARAFUSO SEXTAVADO;MP;PC;PC;01;0001;12,50;11010001
+B1_COD;B1_DESC;B1_TIPO;B1_UM;B1_SEGUM;B1_LOCPAD;B1_GRUPO;B1_PRV1;B1_CONTA;B5_CEME
+PA000001;PARAFUSO SEXTAVADO;MP;PC;PC;01;0001;12,50;11010001;9092026
+```
+
+### Complemento do produto (SB5)
+
+Os campos `B5_*` vão **no mesmo arquivo e no mesmo `MSExecAuto`** dos `B1_*`.
+O `MATA010` grava SB1 e SB5 numa única chamada — **não existe (nem é preciso)
+uma rotina automática separada para o SB5**.
+
+Se o cadastro na tela exige `B5_CEME`, acrescente a coluna:
+
+```
+...;B1_CONTA;B5_CEME
+...;11010001;9092026
+```
+
+Para ver os campos de complemento disponíveis:
+
+```sql
+SELECT X3_CAMPO, X3_TITULO, X3_TIPO, X3_TAMANHO, X3_OBRIGAT
+  FROM SX3XXX
+ WHERE X3_ARQUIVO = 'SB5' AND D_E_L_E_T_ = '' AND X3_CONTEXT <> 'V'
+ ORDER BY X3_ORDEM;
 ```
 
 Regras:

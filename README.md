@@ -24,9 +24,12 @@ detectados automaticamente.
 A primeira linha traz os **nomes técnicos dos campos**, em qualquer ordem:
 
 ```
-B1_COD;B1_DESC;B1_TIPO;B1_UM;B1_SEGUM;B1_LOCPAD;B1_PRV1;B1_CONTA
-PA000001;PARAFUSO SEXTAVADO;MP;PC;PC;01;12,50;11010001
+B1_COD;B1_DESC;B1_TIPO;B1_UM;B1_SEGUM;B1_LOCPAD;B1_PRV1;B1_CONTA;B5_CEME
+PA000001;PARAFUSO SEXTAVADO;MP;PC;PC;01;12,50;11010001;9092026
 ```
+
+Campos do complemento (**`B5_*`**) entram no mesmo arquivo, junto dos `B1_*` —
+o `MATA010` grava as duas tabelas de uma vez. Não é preciso um segundo ExecAuto.
 
 - Para importar um campo novo, **acrescente a coluna** — sem recompilar o fonte.
 - `B1_COD` é o único obrigatório para a rotina; o resto quem exige é o dicionário.
